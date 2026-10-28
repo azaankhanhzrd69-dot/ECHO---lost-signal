@@ -2,7 +2,8 @@
     "name": "Echo.World",
     "rootNamespace": "Echo.World",
     "references": [
-        "Echo.Shared"
+        "Echo.Shared",
+        "Unity.InputSystem"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],
