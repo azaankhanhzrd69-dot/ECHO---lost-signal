@@ -55,6 +55,10 @@ namespace Echo.Shared
                  "Outside this sphere, all noises are inaudible regardless of loudness.")]
         [Min(0f)] public float hearingRadius = 18f;
 
+        [Tooltip("Maximum distance in metres the monster can hear the player while crouching. " +
+                 "Beyond this radius, crouch footsteps are 100% inaudible.")]
+        [Min(0.1f)] public float crouchHearingRadius = 2.0f;
+
         [Tooltip("Scales how much each noise raises the alert meter. " +
                  "1.0 = raw effective value (loudness × falloff). " +
                  "Lower this to make the monster less sensitive overall.")]
@@ -126,6 +130,45 @@ namespace Echo.Shared
 
         [Tooltip("Decay per second of the minigame difficulty bar when the monster pauses.")]
         [Min(0f)] public float bangDecayPerSecond = 0.5f;
+
+        [Header("Death & Respawn (C-09)")]
+        [Tooltip("Minimum seconds the death overlay remains before a respawn request is accepted.")]
+        [Min(0.1f)] public float minDeathScreenSeconds = 1.0f;
+
+        [Tooltip("Seconds for screen fade transition on respawn.")]
+        [Min(0.1f)] public float respawnFadeIn = 0.5f;
+
+        [Header("Airlock & Ending (C-10)")]
+        [Tooltip("Safety timeout in seconds before transitioning from Airlock to Ending if World cutscene does not call AirlockFinished.")]
+        [Min(1.0f)] public float airlockTimeoutSeconds = 8.0f;
+
+        [Tooltip("Seconds the Good Ending text/scene runs before moving to Secret Ending or completion.")]
+        [Min(1.0f)] public float goodEndingSeconds = 8.0f;
+
+        [Tooltip("Seconds the Secret Ending text/scene runs before sequence completes.")]
+        [Min(1.0f)] public float secretEndingSeconds = 8.0f;
+
+        [Header("Chase Beat (C-11)")]
+        [Tooltip("Player's sprint speed in metres/second from EchoPlayerMotor.")]
+        [Min(1.0f)] public float playerSprintSpeed = 6.3f;
+
+        [Tooltip("Ratio of player's sprint speed at which the monster chases (e.g. 0.90 = 90% of player sprint speed).")]
+        [Range(0.5f, 1.2f)] public float chaseSpeedRatio = 0.90f;
+
+        [Tooltip("Multiplier applied to monster hearing radius during Beat.Chase.")]
+        [Min(1.0f)] public float chaseHearingMultiplier = 2.5f;
+
+        [Tooltip("Seconds between synthetic noise pulses emitted at player position during the chase.")]
+        [Min(0.1f)] public float beaconInterval = 0.8f;
+
+        [Tooltip("Loudness (0..1) of synthetic noise pulses emitted during the chase.")]
+        [Range(0.1f, 1.0f)] public float beaconLoudness = 1.0f;
+
+        [Tooltip("Seconds to wait after BeginChase is invoked before transitioning beat to Chase.")]
+        [Min(0f)] public float powerOnToChaseDelay = 2.0f;
+
+        [Tooltip("Minimum safety margin in seconds player must have over monster in chase balance checks.")]
+        [Min(0.5f)] public float minMarginSeconds = 2.0f;
     }
 }
 

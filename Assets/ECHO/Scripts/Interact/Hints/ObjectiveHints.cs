@@ -27,6 +27,7 @@ namespace Echo.Interact
         private bool isSuppressed;
         private string currentObjectiveText;
         private bool isShowing;
+        private float showStartTime;
 
         private void OnEnable()
         {
@@ -62,11 +63,12 @@ namespace Echo.Interact
                 {
                     // Fade out over fadeInSeconds
                     float t = (age - visibleSeconds) / fadeInSeconds;
-                    hintText.color = new Color32(255,255,255, Mathf.Max(0, 255 - (int)(t * 255 / fadeInSeconds)));
+                    byte alpha = (byte)Mathf.Max(0, 255 - (int)(t * 255f / fadeInSeconds));
+                    hintText.color = new Color32(255, 255, 255, alpha);
                     if (age >= visibleSeconds + fadeInSeconds)
                     {
                         isShowing = false;
-                        hintText.color = new Color32(255,255,255,0);
+                        hintText.color = new Color32(255, 255, 255, 0);
                         hintText.text = "";
                     }
                 }
@@ -75,7 +77,7 @@ namespace Echo.Interact
                     // Keep fully visible while within the visible period
                     if (hintText.color.a < 255)
                     {
-                        hintText.color = new Color32(255,255,255,255);
+                        hintText.color = new Color32(255, 255, 255, 255);
                     }
                 }
             }
@@ -110,7 +112,7 @@ namespace Echo.Interact
             isShowing = false;
             reminderTimer = 0f;
             minReminderTimer = 0f;
-            if (hintText != null) { hintText.color = new Color32(255,255,255,0); hintText.text = ""; }
+            if (hintText != null) { hintText.color = new Color32(255, 255, 255, 0); hintText.text = ""; }
 
             // Read the beat's objective info from CSV via the data asset
             if (hintsData != null && hintsData.TryGetBeatInfo(newBeat, out var info))
@@ -140,7 +142,7 @@ namespace Echo.Interact
             if (hintText == null) return;
             currentObjectiveText = text;
             hintText.text = text;
-            hintText.color = new Color32(255,255,255,0);
+            hintText.color = new Color32(255, 255, 255, 0);
             hintText.CrossFadeAlpha(1f, fadeInSeconds, false);
             isShowing = true;
             showStartTime = Time.time;
@@ -163,18 +165,8 @@ namespace Echo.Interact
                 isShowing = false;
                 reminderTimer = 0f;
                 minReminderTimer = 0f;
-                if (hintText != null) { hintText.color = new Color32(255,255,255,0); hintText.text = ""; }
+                if (hintText != null) { hintText.color = new Color32(255, 255, 255, 0); hintText.text = ""; }
                 currentObjectiveText = "";
-            }
-        }
-
-        private void UpdateCoreCounter()
-        {
-            int currentCores = Progress.CoresFound;
-            if (currentCores != lastCoresFound)
-            {
-                lastCoresFound = currentCores;
-                if (hintText != null) hintText.text = $"Cores: {currentCores}/3";
             }
         }
     }
@@ -182,6 +174,7 @@ namespace Echo.Interact
     /// <summary>
     /// Data structure for objective hint info read from objectives.csv.
     /// </summary>
+    [System.Serializable]
     public struct ObjectHintInfo
     {
         public Beat beat;

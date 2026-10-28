@@ -34,7 +34,7 @@ namespace Echo.Core
         // ── IInteractable ─────────────────────────────────────────────────────
 
         /// <summary>Prompt shown by Interact's InteractPromptUI above this spot.</summary>
-        public string Prompt => kind == HideKind.Locker ? "Hide" : "Hide (???)";
+        public string Prompt => Progress.Current == Beat.Chase ? string.Empty : (kind == HideKind.Locker ? "Hide" : "Hide (???)");
 
         /// <summary>
         /// Called by Interact's Interactor when the player presses the interact key.
@@ -42,6 +42,8 @@ namespace Echo.Core
         /// </summary>
         public void Interact()
         {
+            if (Progress.Current == Beat.Chase) return;
+
             HideController ctrl = HideController.Instance;
             if (ctrl == null)
             {

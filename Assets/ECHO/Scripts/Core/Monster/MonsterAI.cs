@@ -57,7 +57,7 @@ namespace Echo.Core
         public float AlertValue => _alert.Value;
 
         /// <summary>Hearing radius from GameTuning. Read by C-06 tests and Gizmos.</summary>
-        public float HearingRadius => tuning != null ? tuning.hearingRadius : 0f;
+        public float HearingRadius => tuning != null ? tuning.hearingRadius * _hearingBoost : 0f;
 
         // ── NavMeshAgent — kept internal but accessible to C-07 scripted mode ─
         // C-07 will call EnterScripted() / ExitScripted() and will need the agent.
@@ -73,6 +73,8 @@ namespace Echo.Core
         private bool     _isActive;              // true when current beat is in ActiveBeats
         private bool     _isScripted;            // C-07 takeover flag
         private bool     _attackFired;           // ensures OnPlayerCaught fires only once
+        private float    _speedBoost = 1f;       // C-11 Chase boost
+        private float    _hearingBoost = 1f;     // C-11 Chase boost
 
         private Vector3  _lastHeardPosition;     // monster chases THIS, never the player's real pos
         private float    _lastHeardTime = -999f; // Time.time when the position was last updated
@@ -189,6 +191,34 @@ namespace Echo.Core
             ResetToDormant();
         }
 
+        // ── C-11 Chase boost API ─────────────────────────────────────────────
+
+        /// <summary>
+        /// Boosts the monster's chase speed and hearing radius during Beat.Chase.
+        /// </summary>
+        public void SetChaseBoost(float speedMultiplier, float hearingMultiplier)
+        {
+            _speedBoost = Mathf.Max(0.1f, speedMultiplier);
+            _hearingBoost = Mathf.Max(0.1f, hearingMultiplier);
+            if (tuning != null)
+                _alert.Configure(tuning.hearingRadius * _hearingBoost, tuning.alertGainScale, tuning.alertDecayPerSecond);
+            if (_agent != null && State == MonsterState.Chase && tuning != null)
+                _agent.speed = tuning.speedChase * _speedBoost;
+        }
+
+        /// <summary>
+        /// Restores standard monster speed and hearing radius when Beat.Chase concludes.
+        /// </summary>
+        public void ClearChaseBoost()
+        {
+            _speedBoost = 1f;
+            _hearingBoost = 1f;
+            if (tuning != null)
+                _alert.Configure(tuning.hearingRadius, tuning.alertGainScale, tuning.alertDecayPerSecond);
+            if (_agent != null && State == MonsterState.Chase && tuning != null)
+                _agent.speed = tuning.speedChase;
+        }
+
         // ── Event handlers ────────────────────────────────────────────────────
 
         private void OnBeatChanged(Beat newBeat)
@@ -203,6 +233,26 @@ namespace Echo.Core
         {
             // Ignore noise when not active, in Attack, or scripted.
             if (!_isActive || _isScripted || State == MonsterState.Attack) return;
+
+            float distance = Vector3.Distance(position, transform.position);
+            float crouchThreshold = tuning != null ? tuning.crouchLoudness : 0.15f;
+            float maxCrouchDist = tuning != null ? tuning.crouchHearingRadius : 2.0f;
+
+            // Crouch walk noise restriction:
+            // When crouching, the sound is muffled and can only be heard within 2 metres.
+            // Beyond 2 metres, the monster is completely oblivious (no alert, no position tracking).
+            if (loudness <= crouchThreshold + 0.02f)
+            {
+                if (distance > maxCrouchDist)
+                    return; // 100% inaudible beyond 2m
+
+                // Within 2m: player is right next to the monster; monster hears the rustle and reacts.
+                _alert.Add(position, Mathf.Max(loudness, tuning != null ? tuning.investigateThreshold : 0.40f), transform.position);
+                _lastHeardPosition = position;
+                _lastHeardTime     = Time.time;
+                EscalateFromNoise();
+                return;
+            }
 
             float added = _alert.Add(position, loudness, transform.position);
             if (added <= 0f) return; // outside hearing radius
@@ -287,7 +337,7 @@ namespace Echo.Core
         {
             bool wasChasing = State == MonsterState.Chase;
             _agent.isStopped = false;
-            _agent.speed     = tuning.speedChase;
+            _agent.speed     = tuning.speedChase * _speedBoost;
             _agent.SetDestination(_lastHeardPosition);
             ChangeState(MonsterState.Chase);
 
@@ -302,14 +352,11 @@ namespace Echo.Core
 
             if (!HasArrivedAtDestination()) return;
 
-            // Arrived at the noise position. Check memory window.
-            bool heardRecently = (Time.time - _lastHeardTime) < tuning.noiseMemory;
-            if (!heardRecently)
-            {
-                OnChaseEnded?.Invoke();
-                EnterSearch();
-            }
-            // else: a new noise came in and updated _lastHeardPosition; stay chasing.
+            // Arrived at the noise position. The monster reached where the noise came from.
+            // If the player stopped running or crouched away, there is no new sound here.
+            // Immediately transition to Search to perform the RNG search pattern!
+            OnChaseEnded?.Invoke();
+            EnterSearch();
         }
 
         // ── Search ────────────────────────────────────────────────────────────
@@ -352,7 +399,7 @@ namespace Echo.Core
                     yield return null;
                 }
 
-                elapsed += waited; // avoid double-counting if waypoint reached quickly
+                // Note: elapsed is already accumulated in the while loop above
                 yield return null;
             }
 

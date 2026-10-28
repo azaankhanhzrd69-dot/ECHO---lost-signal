@@ -22,6 +22,7 @@ namespace Echo.World
         private bool isMoving;
 
         public bool IsLocked => isLocked;
+        public bool IsOpen => isOpen;
 
         public void Open()
         {

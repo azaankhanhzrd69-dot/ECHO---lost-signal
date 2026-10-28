@@ -28,7 +28,7 @@ namespace Echo.World
             if (Progress.Current != requiredCurrentBeat) return;
 
             EchoEvents.SetBeat(beatToSet);
-            fired = true;
+            if (oneShot) fired = true;
         }
     }
 }

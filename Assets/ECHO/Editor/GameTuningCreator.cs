@@ -46,6 +46,7 @@ namespace Echo.Editor
 
             // ── Monster Hearing & Alert (C-05) ────────────────────────────────────
             tuning.hearingRadius         = 18.0f;
+            tuning.crouchHearingRadius   = 2.0f;
             tuning.alertGainScale        = 1.0f;
             tuning.alertDecayPerSecond   = 0.15f;
             tuning.investigateThreshold  = 0.40f;   // raised: one crouch step won't trigger

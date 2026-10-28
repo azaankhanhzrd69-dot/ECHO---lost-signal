@@ -117,6 +117,8 @@ namespace Echo.Core
         /// </summary>
         public void BeginHide(HideSpot spot)
         {
+            if (Progress.Current == Beat.Chase) return;
+
             if (IsHiding)
             {
                 Debug.Log("[HideController] Already hiding — ignoring BeginHide.", this);
@@ -194,7 +196,7 @@ namespace Echo.Core
             IsHiding = true;
 
             // Snapshot progress BEFORE the hide — C-09 can restore from this if the player dies.
-            ProgressSnapshot snapshot = Progress.Snapshot();
+            Echo.Shared.ProgressSnapshot snapshot = Progress.Snapshot();
 
             // ── Step 1: Lock input and play the entry animation. ──────────────
             EchoEvents.LockInput();

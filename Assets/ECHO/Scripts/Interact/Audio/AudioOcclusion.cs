@@ -192,7 +192,7 @@ namespace Echo.Interact
             if (_cachedListener != null && _cachedListener.isActiveAndEnabled)
                 return;
 
-            _cachedListener = FindFirstObjectByType<AudioListener>();
+            _cachedListener = FindAnyObjectByType<AudioListener>();
         }
 
         // ── Tuning Accessors ──────────────────────────────────────────────────
