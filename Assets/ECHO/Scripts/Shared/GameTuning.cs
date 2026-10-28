@@ -43,9 +43,47 @@ namespace Echo.Shared
         [Min(0f)] public float speedSearch = 1.8f;
         [Min(0f)] public float killRange = 1.45f;
 
+        [Header("Monster Search")]
+        [Tooltip("Radius in metres around the last heard position within which random search waypoints are sampled.")]
+        [Min(1f)] public float searchRadius = 8f;
+
+        [Header("Monster Memory")]
+        [Tooltip("Seconds a heard position is kept as the active chase destination before the monster gives up " +
+                 "and falls through to Search if it has not heard anything new.")]
+        [Min(0f)] public float noiseMemory = 6f;
+
+        [Header("Lunge Sequence (C-07)")]
+        [Tooltip("Seconds the monster idles at the eating spot before noticing John and dashing.")]
+        [Min(0f)] public float lungeNoticePause = 1.5f;
+
+        [Tooltip("NavMeshAgent speed during the Lunge dash to the door. Should be faster than speedChase.")]
+        [Min(0f)] public float lungeDashSpeed = 8f;
+
+        [Tooltip("Total seconds the monster bangs on the door before the sequence ends and HideIntro begins.")]
+        [Min(0f)] public float lungeBangDuration = 6f;
+
+        [Tooltip("Seconds between each OnBang UnityEvent invocation during the banging phase.")]
+        [Min(0.05f)] public float lungeBangInterval = 0.8f;
+
         [Header("Hide Mechanics")]
         [Min(0)] public int safeHidesBeforeDeath = 3;
+
+        [Tooltip("Seconds after an instant-kill hide (Table/Chair) before OnHideDeath fires.")]
+        [Min(0f)] public float instantKillDelay = 1.2f;
+
+        [Tooltip("Seconds to wait for the monster to reach the hide spot's monsterPoint before warping it there.")]
+        [Min(0f)] public float monsterArriveTimeout = 5f;
+
+        [Tooltip("Seconds between each OnBang UnityEvent during a hide.")]
+        [Min(0.05f)] public float hideBangInterval = 0.8f;
+
+        [Tooltip("Seconds the player must wait after exiting a hide before they can begin another.")]
+        [Min(0f)] public float hideCooldown = 2f;
+
+        [Tooltip("Fill per second that drives the minigame difficulty bar while the monster bangs.")]
         [Min(0f)] public float bangFillPerSecond = 0.35f;
+
+        [Tooltip("Decay per second of the minigame difficulty bar when the monster pauses.")]
         [Min(0f)] public float bangDecayPerSecond = 0.5f;
     }
 }
