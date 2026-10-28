@@ -10,6 +10,11 @@ public sealed class EchoBlastDoor : MonoBehaviour
 
     public bool IsOpen { get { return isOpen; } }
 
+    private void Awake()
+    {
+        Initialize();
+    }
+
     public void Initialize()
     {
         closedPosition = transform.localPosition;

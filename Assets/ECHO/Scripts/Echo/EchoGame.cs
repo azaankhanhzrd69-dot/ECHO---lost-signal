@@ -85,7 +85,6 @@ public sealed partial class EchoGame : MonoBehaviour
     private AudioClip monsterDeathRoarClip;
     private AudioClip[] footstepClips = new AudioClip[10];
     private float deathCutsceneTimer;
-    private GameObject airlockBulkhead;
     private GameObject annexBulkhead;
     private GameObject escapeShip;
     private GameObject blackHole;
@@ -395,7 +394,6 @@ public sealed partial class EchoGame : MonoBehaviour
         playerMotor.SetFlashlightActive(true);
         creature.ResetCreature();
         SetBlastDoorOpen(annexBulkhead, false);
-        SetBlastDoorOpen(airlockBulkhead, false);
         for (int i = 0; i < kitCrates.Length; i++)
             kitCrates[i].SetActive(true);
         state = GameState.Playing;
@@ -464,15 +462,18 @@ public sealed partial class EchoGame : MonoBehaviour
     private EchoInteractable FindNearbyInteractable()
     {
         EchoInteractable closest = null;
-        float bestDistance = 2.6f;
+        float bestDistance = float.PositiveInfinity;
         for (int i = 0; i < interactables.Count; i++)
         {
             EchoInteractable item = interactables[i];
             if (item == null || !item.gameObject.activeInHierarchy)
                 continue;
+            if (item.Kind == "WIRE" && reactorWiresConnected[item.Index])
+                continue;
 
             float distance = Vector3.Distance(player.transform.localPosition, item.transform.localPosition);
-            if (distance < bestDistance)
+            float interactionRange = item.Kind == "WIRE" || item.Kind == "PUZZLE" ? 3.5f : 2.6f;
+            if (distance < interactionRange && distance < bestDistance)
             {
                 closest = item;
                 bestDistance = distance;
@@ -769,7 +770,6 @@ public sealed partial class EchoGame : MonoBehaviour
             endingTitle = "SILENCE, AT LAST";
             endingBody = "You seal the airlock, board the StarSparrow, and launch alone. Behind you, three red lights vanish into the cold.";
         }
-        SetBlastDoorOpen(airlockBulkhead, true);
         player.transform.SetParent(escapeShip.transform, false);
         player.transform.localPosition = new Vector3(0f, 0f, 2.2f);
         player.transform.localRotation = Quaternion.identity;
@@ -1459,5 +1459,3 @@ public sealed partial class EchoGame : MonoBehaviour
         return nearest;
     }
 }
-
-

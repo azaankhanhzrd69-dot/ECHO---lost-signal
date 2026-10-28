@@ -315,7 +315,7 @@ public sealed class EchoCreature : MonoBehaviour
         target.y = transform.localPosition.y;
 
         float speed = investigating
-            ? (distance < 6f ? 7.5f : 6.85f)
+            ? (distance < 6f ? 5.9f : 5.8f)
             : 2.35f;
         Vector3 oldPosition = transform.localPosition;
         Vector3 movement = target - oldPosition;

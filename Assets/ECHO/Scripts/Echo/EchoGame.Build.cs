@@ -101,10 +101,16 @@ public sealed partial class EchoGame : MonoBehaviour
 
         // 2. Blast doors (doors count)
         annexBulkhead = GameObject.Find("Power-controlled annex blast door");
-        airlockBulkhead = GameObject.Find("Power-controlled airlock blast door");
+        GameObject extraAirlockDoor = GameObject.Find("Power-controlled airlock blast door");
+        if (extraAirlockDoor != null)
+            extraAirlockDoor.SetActive(false);
+
+        GameObject escapeAirlockFrame = GameObject.Find("Modular escape airlock");
+        if (escapeAirlockFrame != null)
+            escapeAirlockFrame.SetActive(false);
+
         int doorsFound = 0;
         if (annexBulkhead != null) doorsFound++;
-        if (airlockBulkhead != null) doorsFound++;
 
         // 3. Escape ship and Black hole
         escapeShip = GameObject.Find("StarSparrow - escape craft");
@@ -220,6 +226,19 @@ public sealed partial class EchoGame : MonoBehaviour
             else
             {
                 others.Add(item);
+            }
+
+            item.transform.localPosition = GetAccessibleInteractionPosition(item.Kind, pos);
+            if (item.Kind == "WIRE")
+            {
+                Transform connector = item.transform.Find("Reactor lead connector " + (item.Index + 1));
+                if (connector != null)
+                {
+                    connector.localPosition = new Vector3(
+                        0f,
+                        1.07f - item.transform.localPosition.y,
+                        -1.74f - item.transform.localPosition.z);
+                }
             }
         }
 
@@ -673,14 +692,10 @@ public sealed partial class EchoGame : MonoBehaviour
     {
         BuildRoofGrid(35f, 83f, -18f, 18f, "Annex");
 
-        AddWall(30f, 20f, 4f, true);
         AddWall(40f, 20f, 8f, true);
-        AddWall(52f, 20f, 8f, true);
         AddWall(64f, 20f, 8f, true);
         AddWall(76f, 20f, 8f, true);
-        AddWall(30f, -20f, 4f, true);
         AddWall(40f, -20f, 8f, true);
-        AddWall(52f, -20f, 8f, true);
         AddWall(64f, -20f, 8f, true);
         AddWall(76f, -20f, 8f, true);
         AddWall(80f, 23f, 6f, false);
@@ -689,37 +704,31 @@ public sealed partial class EchoGame : MonoBehaviour
         AddWall(80f, -12f, 16f, false);
 
         AddWall(41f, 6f, 14f, true);
-        AddWall(59f, 6f, 10f, true);
+        AddWall(58.5f, 6f, 9f, true);
         AddWall(74f, 6f, 22f, true);
         AddWall(41f, -6f, 14f, true);
-        AddWall(59f, -6f, 10f, true);
+        AddWall(58.5f, -6f, 9f, true);
         AddWall(74f, -6f, 22f, true);
 
         AddWall(42f, 13f, 14f, false);
         AddWall(60f, 7.25f, 1.5f, false);
         AddWall(60f, 19f, 2f, false);
-        AddWall(51f, 20f, 18f, true);
-        AddWall(45f, 6f, 6f, true);
-        AddWall(57f, 6f, 6f, true);
+        AddWall(52f, 20f, 16f, true);
 
         AddWall(42f, -13f, 14f, false);
         AddWall(60f, -7.25f, 1.5f, false);
         AddWall(60f, -19f, 2f, false);
-        AddWall(51f, -20f, 18f, true);
-        AddWall(45f, -6f, 6f, true);
-        AddWall(57f, -6f, 6f, true);
+        AddWall(52f, -20f, 16f, true);
 
         AddWall(62f, 12f, 8f, false);
         AddWall(62f, -12f, 8f, false);
 
         annexBulkhead = CreateBlastDoor("Power-controlled annex blast door", new Vector3(32f, 1.8f, 0f), 5.2f, 4f);
-        airlockBulkhead = CreateBlastDoor("Power-controlled airlock blast door", new Vector3(79.4f, 1.8f, 0f), 5.2f, 6f);
 
         PlaceKitModule(doorFramePrefab, new Vector3(32f, 0f, 0f), 90f, "Modular engineering airlock", true, false);
         PlaceKitModule(doorFramePrefab, new Vector3(51f, 0f, 6f), 0f, "Modular hydroponics doorway", true, false);
         PlaceKitModule(doorFramePrefab, new Vector3(51f, 0f, -6f), 180f, "Modular maintenance doorway", true, false);
         PlaceKitModule(doorFramePrefab, new Vector3(62f, 0f, 0f), 90f, "Modular cargo doorway", true, false);
-        PlaceKitModule(doorFramePrefab, new Vector3(79.4f, 0f, 0f), 90f, "Modular escape airlock", true, false);
 
         BuildSpaceWindow(34f, 20f, 1f, "Hydroponics observation window");
         BuildSpaceWindow(46f, 20f, 1f, "Hydroponics observation window");
@@ -1105,6 +1114,16 @@ public sealed partial class EchoGame : MonoBehaviour
         return door;
     }
 
+    private static Vector3 GetAccessibleInteractionPosition(string kind, Vector3 originalPosition)
+    {
+        if (kind == "PUZZLE")
+            return new Vector3(originalPosition.x + 1.25f, 0.1f, 0.1f);
+        if (kind == "WIRE")
+            return new Vector3(originalPosition.x, 0.1f, -1.1f);
+
+        return originalPosition;
+    }
+
     private GameObject MakeBlock(string name, Vector3 position, Vector3 scale, Material material, bool solid)
     {
         GameObject block = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -1191,7 +1210,7 @@ public sealed partial class EchoGame : MonoBehaviour
     {
         GameObject target = new GameObject(kind == "CORE" ? "Resonance power core" : label);
         target.transform.SetParent(worldRoot, false);
-        target.transform.localPosition = position;
+        target.transform.localPosition = GetAccessibleInteractionPosition(kind, position);
         EchoInteractable interactable = target.AddComponent<EchoInteractable>();
         interactable.Initialize(kind, index, label);
         interactables.Add(interactable);
@@ -1291,7 +1310,10 @@ public sealed partial class EchoGame : MonoBehaviour
                 GameObject connector = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
                 connector.name = "Reactor lead connector " + (index + 1);
                 connector.transform.SetParent(target.transform, false);
-                connector.transform.localPosition = new Vector3(0f, 0.12f, 0.16f);
+                connector.transform.localPosition = new Vector3(
+                    0f,
+                    1.07f - target.transform.localPosition.y,
+                    -1.74f - target.transform.localPosition.z);
                 connector.transform.localScale = new Vector3(0.16f, 0.08f, 0.16f);
                 connector.GetComponent<Renderer>().sharedMaterial = deadCoreMaterial;
                 Destroy(connector.GetComponent<Collider>());
