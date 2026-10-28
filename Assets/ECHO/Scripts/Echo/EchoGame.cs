@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Echo.Shared;
 using UnityEngine;
 using UnityEngine.Animations;
 using UnityEngine.InputSystem;
@@ -151,8 +152,21 @@ public sealed partial class EchoGame : MonoBehaviour
     private GUIStyle headingStyle;
     private bool stylesReady;
 
+    [Header("W-06 Test Arena")]
+    [Tooltip("Builds a standalone test arena instead of the production station.")]
+    [SerializeField] private bool testArenaMode;
+    [Tooltip("Spawns the existing monster controller and model in this test arena.")]
+    [SerializeField] private bool testMonsterEnabled = true;
+    [Tooltip("Player spawn in station-local coordinates.")]
+    [SerializeField] private Vector3 testPlayerSpawn;
+    [Tooltip("Monster spawn in station-local coordinates.")]
+    [SerializeField] private Vector3 testMonsterSpawn = new Vector3(-15f, 0.1f, 0f);
+    [Tooltip("Ordered patrol route used by the W-06 monster arena.")]
+    [SerializeField] private Transform[] testPatrolWaypoints = new Transform[0];
+
     public static EchoGame Instance { get { return instance; } }
     public bool CanEmitPulse { get { return state == GameState.Playing; } }
+    public bool IsTestArena { get { return testArenaMode; } }
     public Transform PlayerTransform { get { return player != null ? player.transform : null; } }
     public Vector3 PlayerPosition { get { return player != null ? player.transform.localPosition : Vector3.zero; } }
 
@@ -176,7 +190,16 @@ public sealed partial class EchoGame : MonoBehaviour
 
         instance = this;
         BuildGame();
-        SetCursor(false);
+        if (testArenaMode)
+        {
+            state = GameState.Playing;
+            playerMotor.SetControlsEnabled(true);
+            SetCursor(true);
+        }
+        else
+        {
+            SetCursor(false);
+        }
     }
 
     private void OnDestroy()
@@ -296,10 +319,13 @@ public sealed partial class EchoGame : MonoBehaviour
         if (IsInCoolantLeak() && Time.time >= statusUntil)
             ShowMessage("COOLANT LEAK  //  flashlight charge is draining fast.");
 
-        float distance = Vector3.Distance(player.transform.localPosition, creature.transform.localPosition);
-        UpdateThreatEffects(distance);
-        if (distance < 1.45f)
-            TriggerDeathCutscene();
+        if (creature != null)
+        {
+            float distance = Vector3.Distance(player.transform.localPosition, creature.transform.localPosition);
+            UpdateThreatEffects(distance);
+            if (distance < 1.45f)
+                TriggerDeathCutscene();
+        }
     }
 
     private static bool Pressed(Key key)
@@ -333,6 +359,24 @@ public sealed partial class EchoGame : MonoBehaviour
     private void RestartGame()
     {
         Time.timeScale = 1f;
+        if (testArenaMode)
+        {
+            player.transform.localPosition = testPlayerSpawn;
+            player.transform.rotation = Quaternion.identity;
+            playerMotor.ResetMotor();
+            playerMotor.SetFlashlightActive(true);
+            if (creature != null)
+            {
+                creature.ResetCreature();
+                creature.SetVisible(true);
+            }
+            activeInteractable = null;
+            state = GameState.Playing;
+            SetCursor(true);
+            ShowMessage("TEST ARENA RESET.");
+            return;
+        }
+
         if (player.transform.parent != worldRoot)
             player.transform.SetParent(worldRoot, false);
         if (escapeShip != null)
@@ -485,6 +529,13 @@ public sealed partial class EchoGame : MonoBehaviour
 
     private void Interact(EchoInteractable item)
     {
+        if (item.Kind == "HIDE")
+        {
+            ShowMessage("HOLD THE CENTER OF THE RING TO STAY HIDDEN.");
+            EchoEvents.StartHide(worldRoot.TransformPoint(item.transform.localPosition));
+            return;
+        }
+
         if (item.Kind == "CORE")
         {
             if (collectedCores[item.Index])
@@ -909,6 +960,12 @@ public sealed partial class EchoGame : MonoBehaviour
     private void OnGUI()
     {
         EnsureStyles();
+        if (testArenaMode && state == GameState.Playing)
+        {
+            DrawTestArenaHud();
+            return;
+        }
+
         switch (state)
         {
             case GameState.Title:
@@ -942,6 +999,17 @@ public sealed partial class EchoGame : MonoBehaviour
                     DrawEndCard(endingTitle, endingBody, "ENTER  /  PLAY AGAIN");
                 break;
         }
+    }
+
+    private void DrawTestArenaHud()
+    {
+        GUI.Label(new Rect(20f, 18f, 500f, 30f), "ECHO  /  W-06 TEST ARENA", headingStyle);
+        if (activeInteractable != null)
+            GUI.Label(new Rect(20f, 58f, 520f, 30f), "[E]  " + activeInteractable.Label, subtitleStyle);
+        if (!string.IsNullOrEmpty(statusMessage) && Time.time <= statusUntil)
+            GUI.Label(new Rect(20f, Screen.height - 54f, 700f, 30f), statusMessage, subtitleStyle);
+        GUI.Label(new Rect(20f, Screen.height - 28f, 620f, 24f),
+            "WASD MOVE    SHIFT SPRINT    E INTERACT    ESC PAUSE", smallStyle);
     }
 
     private bool GetNextObjective(out string label, out Vector3 position)
@@ -1384,6 +1452,16 @@ public sealed partial class EchoGame : MonoBehaviour
     public Vector3 GetRoutePosition(int index)
     {
         return RouteNodes[index];
+    }
+
+    public Vector3 GetLocalRoutePosition(Transform waypoint)
+    {
+        if (waypoint == null)
+            throw new System.ArgumentNullException(nameof(waypoint));
+        if (worldRoot == null)
+            throw new System.InvalidOperationException("The station root must exist before resolving patrol waypoints.");
+
+        return worldRoot.InverseTransformPoint(waypoint.position);
     }
 
     public int GetNextRouteNode(Vector3 from, Vector3 destination)

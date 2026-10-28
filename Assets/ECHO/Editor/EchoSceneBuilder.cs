@@ -7,8 +7,8 @@ using UnityEngine;
 /// The preview is placed at the world origin (0,0,0).
 ///
 /// Usage:
-///   ECHO > Build Scene Preview   — spawns the station geometry
-///   ECHO > Clear Scene Preview   — removes it
+///   ECHO > Build Scene Preview   - spawns the station geometry
+///   ECHO > Clear Scene Preview   - removes it
 ///
 /// The preview is automatically removed when entering Play mode to avoid duplicating
 /// the runtime-generated station from EchoGame.
@@ -16,6 +16,11 @@ using UnityEngine;
 public static class EchoSceneBuilder
 {
     private const string RootName = "ECHO_SCENE_PREVIEW";
+
+    // Width of the 8 m wide gap left in the walls at the annex and escape airlocks.
+    // If DoorWay_01_Large is narrower than this, the panel is what fills the rest.
+    private const float AirlockGapWidth = 8f;
+    private const float DoorPanelHeight = 3.6f;
 
     // ------------------------------------------------------------------ menu items
     [MenuItem("ECHO/Build Scene Preview", false, 200)]
@@ -46,11 +51,9 @@ public static class EchoSceneBuilder
         Material template = Resources.Load<Material>("EchoLit");
         if (template == null) { Debug.LogError("EchoLit material not found in Resources."); return; }
 
-        Material floorMat = MakeMat(template, c(0.045f, 0.065f, 0.08f), c(0.005f, 0.018f, 0.024f));
         Material wallMat = MakeMat(template, c(0.06f, 0.09f, 0.11f), c(0.012f, 0.04f, 0.05f));
         Material trimMat = MakeMat(template, c(0.08f, 0.19f, 0.22f), c(0.025f, 0.19f, 0.22f));
         Material brightMat = MakeMat(template, c(0.06f, 0.48f, 0.55f), c(0.01f, 0.5f, 0.62f));
-        Material coreMat = MakeMat(template, c(0.13f, 0.8f, 0.9f), c(0.12f, 1.1f, 1.3f));
         Material deadCoreMat = MakeMat(template, c(0.045f, 0.06f, 0.07f), Color.black);
         Material windowMat = MakeMat(template, c(0.12f, 0.42f, 0.55f, 0.22f), c(0.025f, 0.11f, 0.16f));
         windowMat.SetFloat("_Surface", 1f);
@@ -60,7 +63,7 @@ public static class EchoSceneBuilder
         Material starMat = MakeMat(template, c(0.35f, 0.75f, 1f), c(1.1f, 1.8f, 2.4f));
         Material planetMat = MakeMat(template, c(0.06f, 0.19f, 0.38f), c(0.025f, 0.15f, 0.4f));
         Material creatureMat = MakeMat(template, c(0.09f, 0.025f, 0.04f), c(0.16f, 0.008f, 0.025f));
-        Material wireMat = MakeMat(template, c(0.035f, 0.055f, 0.07f), Color.black);
+        Material horizonMat = MakeMat(template, c(0.001f, 0.001f, 0.006f), Color.black);
 
         // Root at origin
         GameObject root = new GameObject(RootName);
@@ -69,18 +72,17 @@ public static class EchoSceneBuilder
 
         // ============ BUILD STATION (mirrors EchoGame.BuildStation) ============
 
-        // Floors
+        // Floors / roofs.  Roof tiles are 6 m, so centres 6 m apart tile with no overlap.
         FloorGrid(floorTile, R, -48f, 96f, -30f, 30f, "Station");
-        // Roofs
-        RoofGrid(roofTile, R, -30f, 30f, -18f, 18f, "Deck");
+        RoofGrid(roofTile, R, -30f, 30f, -18f, 18f, "Deck");      // covers x -33..33
 
-        // Outer walls
+        // Outer walls (z = +/-20). Gaps at x = -20, -8, 8, 20 are for windows.
         Wall(wallModule, R, -27f, 20f, 10f, true); Wall(wallModule, R, -14f, 20f, 8f, true);
         Wall(wallModule, R, 0f, 20f, 12f, true); Wall(wallModule, R, 14f, 20f, 8f, true);
-        Wall(wallModule, R, 27f, 20f, 10f, true);
+        Wall(wallModule, R, 25f, 20f, 6f, true);                  // x 22..28 (annex wall takes over at 28)
         Wall(wallModule, R, -27f, -20f, 10f, true); Wall(wallModule, R, -14f, -20f, 8f, true);
         Wall(wallModule, R, 0f, -20f, 12f, true); Wall(wallModule, R, 14f, -20f, 8f, true);
-        Wall(wallModule, R, 27f, -20f, 10f, true);
+        Wall(wallModule, R, 25f, -20f, 6f, true);
         Wall(wallModule, R, -32f, 0f, 40f, false);
         Wall(wallModule, R, 32f, 12f, 16f, false); Wall(wallModule, R, 32f, -12f, 16f, false);
 
@@ -109,7 +111,7 @@ public static class EchoSceneBuilder
         // Airlock walls
         Wall(wallModule, R, 30f, 3.8f, 4f, true); Wall(wallModule, R, 30f, -3.8f, 4f, true);
 
-        // Windows
+        // Windows (main station)
         float[] winPos = { -20f, -8f, 8f, 20f };
         for (int i = 0; i < winPos.Length; i++)
         {
@@ -117,23 +119,16 @@ public static class EchoSceneBuilder
             SpaceWindow(R, winPos[i], -20f, -1f, windowMat, trimMat, brightMat, starMat);
         }
 
-        // Lights
-        AddLight(corridorLight, R, v(-23f, 3.2f, 0f), 5f, c(0.08f, 0.62f, 0.75f));
-        AddLight(corridorLight, R, v(-8f, 3.2f, 0f), 5f, c(0.07f, 0.55f, 0.68f));
-        AddLight(corridorLight, R, v(-8f, 3.2f, 11f), 4f, c(0.05f, 0.47f, 0.64f));
-        AddLight(corridorLight, R, v(-8f, 3.2f, -11f), 4f, c(0.05f, 0.47f, 0.64f));
-        AddLight(corridorLight, R, v(7f, 3.2f, 12f), 5f, c(0.06f, 0.48f, 0.64f));
-        AddLight(corridorLight, R, v(7f, 3.2f, -12f), 5f, c(0.06f, 0.48f, 0.64f));
-        AddLight(corridorLight, R, v(20f, 3.2f, 0f), 5f, c(0.62f, 0.1f, 0.08f));
-        AddLight(corridorLight, R, v(29f, 3.2f, 0f), 4f, c(0.08f, 0.55f, 0.72f));
-        AddLight(corridorLight, R, v(50f, 3.1f, 0f), 7f, c(0.06f, 0.44f, 0.66f));
-        AddLight(corridorLight, R, v(70f, 3.1f, 0f), 8f, c(0.12f, 0.3f, 0.55f));
+        // Corridor lights (main corridor)
+        Color lightColor = c(0.35f, 0.8f, 0.9f);
+        for (int x = -28; x <= 28; x += 8)
+            AddLight(corridorLight, R, v(x, 0f, 0f), 9f, lightColor);
 
         // ============ BUILD MODULAR ANNEX (mirrors EchoGame.BuildModularAnnex) ============
 
-        RoofGrid(roofTile, R, 35f, 83f, -18f, 18f, "Annex");
+        RoofGrid(roofTile, R, 36f, 78f, -18f, 18f, "Annex");      // covers x 33..81, seam at 33
 
-        // Annex outer walls
+        // Annex outer walls (z = +/-20). Gaps at x = 34, 46, 58, 70 are for windows.
         Wall(wallModule, R, 30f, 20f, 4f, true); Wall(wallModule, R, 40f, 20f, 8f, true);
         Wall(wallModule, R, 52f, 20f, 8f, true); Wall(wallModule, R, 64f, 20f, 8f, true);
         Wall(wallModule, R, 76f, 20f, 8f, true);
@@ -143,42 +138,45 @@ public static class EchoSceneBuilder
         Wall(wallModule, R, 80f, 23f, 6f, false); Wall(wallModule, R, 80f, -23f, 6f, false);
         Wall(wallModule, R, 80f, 12f, 16f, false); Wall(wallModule, R, 80f, -12f, 16f, false);
 
-        // Annex inner walls
-        Wall(wallModule, R, 41f, 6f, 14f, true); Wall(wallModule, R, 59f, 6f, 10f, true);
-        Wall(wallModule, R, 74f, 6f, 22f, true);
-        Wall(wallModule, R, 41f, -6f, 14f, true); Wall(wallModule, R, 59f, -6f, 10f, true);
-        Wall(wallModule, R, 74f, -6f, 22f, true);
+        // Annex inner corridor walls (z = +/-6). Gap x 48..54 is the hydroponics/maintenance doorway.
+        Wall(wallModule, R, 41f, 6f, 14f, true);      // x 34..48
+        Wall(wallModule, R, 59f, 6f, 10f, true);      // x 54..64
+        Wall(wallModule, R, 72f, 6f, 16f, true);      // x 64..80
+        Wall(wallModule, R, 41f, -6f, 14f, true);
+        Wall(wallModule, R, 59f, -6f, 10f, true);
+        Wall(wallModule, R, 72f, -6f, 16f, true);
 
+        // Annex room walls
         Wall(wallModule, R, 42f, 13f, 14f, false);
         Wall(wallModule, R, 60f, 7.25f, 1.5f, false); Wall(wallModule, R, 60f, 19f, 2f, false);
-        Wall(wallModule, R, 51f, 20f, 18f, true); Wall(wallModule, R, 45f, 6f, 6f, true);
-        Wall(wallModule, R, 57f, 6f, 6f, true);
+        Wall(wallModule, R, 51f, 18f, 18f, true);     // hydroponics back wall (x 42..60)
         Wall(wallModule, R, 42f, -13f, 14f, false);
         Wall(wallModule, R, 60f, -7.25f, 1.5f, false); Wall(wallModule, R, 60f, -19f, 2f, false);
-        Wall(wallModule, R, 51f, -20f, 18f, true); Wall(wallModule, R, 45f, -6f, 6f, true);
-        Wall(wallModule, R, 57f, -6f, 6f, true);
+        Wall(wallModule, R, 51f, -18f, 18f, true);    // maintenance back wall (x 42..60)
         Wall(wallModule, R, 62f, 12f, 8f, false); Wall(wallModule, R, 62f, -12f, 8f, false);
 
-        // Blast doors (visual only — no runtime behaviour)
-        FittedModule(doorPanel, R, v(32f, 1.8f, 0f), false, 5.2f, 3.6f, "Annex blast door");
-        FittedModule(doorPanel, R, v(79.4f, 1.8f, 0f), false, 5.2f, 3.6f, "Airlock blast door");
+        // Blast doors (visual only - no runtime behaviour)
+        FittedModule(doorPanel, R, v(32f, 1.8f, 0f), false, AirlockGapWidth, DoorPanelHeight, "Annex blast door");
+        FittedModule(doorPanel, R, v(79.4f, 1.8f, 0f), false, AirlockGapWidth, DoorPanelHeight, "Escape blast door");
 
         // Doorframes
-        PlaceModule(doorFrame, R, v(32f, 0f, 0f), 90f, "Engineering airlock");
+        PlaceModule(doorFrame, R, v(32f, 0f, 0f), 90f, "Engineering airlock frame");
         PlaceModule(doorFrame, R, v(51f, 0f, 6f), 0f, "Hydroponics doorway");
         PlaceModule(doorFrame, R, v(51f, 0f, -6f), 180f, "Maintenance doorway");
-        PlaceModule(doorFrame, R, v(62f, 0f, 0f), 90f, "Cargo doorway");
-        PlaceModule(doorFrame, R, v(79.4f, 0f, 0f), 90f, "Escape airlock");
+        PlaceModule(doorFrame, R, v(62f, 0f, 0f), 90f, "Cargo gateway (free-standing)");
+        PlaceModule(doorFrame, R, v(79.4f, 0f, 0f), 90f, "Escape airlock frame");
 
         // Annex windows
-        SpaceWindow(R, 34f, 20f, 1f, windowMat, trimMat, brightMat, starMat);
-        SpaceWindow(R, 46f, 20f, 1f, windowMat, trimMat, brightMat, starMat);
-        SpaceWindow(R, 58f, 20f, 1f, windowMat, trimMat, brightMat, starMat);
-        SpaceWindow(R, 70f, 20f, 1f, windowMat, trimMat, brightMat, starMat);
-        SpaceWindow(R, 34f, -20f, -1f, windowMat, trimMat, brightMat, starMat);
-        SpaceWindow(R, 46f, -20f, -1f, windowMat, trimMat, brightMat, starMat);
-        SpaceWindow(R, 58f, -20f, -1f, windowMat, trimMat, brightMat, starMat);
-        SpaceWindow(R, 70f, -20f, -1f, windowMat, trimMat, brightMat, starMat);
+        float[] annexWinPos = { 34f, 46f, 58f, 70f };
+        for (int i = 0; i < annexWinPos.Length; i++)
+        {
+            SpaceWindow(R, annexWinPos[i], 20f, 1f, windowMat, trimMat, brightMat, starMat);
+            SpaceWindow(R, annexWinPos[i], -20f, -1f, windowMat, trimMat, brightMat, starMat);
+        }
+
+        // Corridor lights (annex)
+        for (int x = 40; x <= 76; x += 12)
+            AddLight(corridorLight, R, v(x, 0f, 0f), 9f, lightColor);
 
         // Annex modules
         PlaceModule(pipeWall, R, v(40.5f, 0f, 12f), 90f, "Hydroponics column");
@@ -193,9 +191,10 @@ public static class EchoSceneBuilder
         PlaceModule(overheadGrid, R, v(64f, 3.55f, 11f), 0f, "Cargo overhead gantry");
         PlaceModule(overheadGrid, R, v(64f, 3.55f, -11f), 180f, "Cargo overhead gantry");
 
-        // Intercoms
-        for (int x = 40; x <= 76; x += 12)
-            PlaceModule(intercom, R, v(x, 1.25f, 3.55f), 0f, "Emergency intercom");
+        // Intercoms: mounted on the z=+6 annex corridor wall, skipping the doorway gap (x 48..54)
+        float[] intercomX = { 40f, 58f, 70f };
+        for (int i = 0; i < intercomX.Length; i++)
+            PlaceModule(intercom, R, v(intercomX[i], 1.25f, 5.55f), 0f, "Emergency intercom");
 
         // Cargo crates
         PlaceModule(crate, R, v(68f, 0.08f, 10f), 0f, "Cargo crate");
@@ -210,8 +209,8 @@ public static class EchoSceneBuilder
         Sign(R, trimMat, "CREW QUARTERS  /  03", v(2f, 2.65f, -17.68f), 0f);
         Sign(R, trimMat, "REACTOR  /  04", v(13.28f, 2.65f, 0f), 90f);
         Sign(R, trimMat, "AIRLOCK  /  05", v(25.9f, 2.65f, 0f), 90f);
-        Sign(R, trimMat, "HYDROPONICS  /  06", v(51f, 2.8f, 19.5f), 180f);
-        Sign(R, trimMat, "MAINTENANCE  /  07", v(51f, 2.8f, -19.5f), 0f);
+        Sign(R, trimMat, "HYDROPONICS  /  06", v(51f, 2.65f, 17.68f), 180f);   // on the z=18 wall
+        Sign(R, trimMat, "MAINTENANCE  /  07", v(51f, 2.65f, -17.68f), 0f);    // on the z=-18 wall
         Sign(R, trimMat, "CARGO BAY  /  08", v(70f, 2.8f, 19.5f), 180f);
         Sign(R, trimMat, "RELAY  /  A", v(52f, 3.15f, 17.9f), 180f);
         Sign(R, trimMat, "RELAY  /  B", v(52f, 3.15f, -17.9f), 0f);
@@ -248,43 +247,44 @@ public static class EchoSceneBuilder
         Sphere(R, "Distant moon", v(56f, 6f, -62f), v(10f, 10f, 10f), planetMat);
 
         // ============ BLACK HOLE ============
-        Material horizon = MakeMat(template, c(0.001f, 0.001f, 0.006f), Color.black);
-        Sphere(R, "Event horizon", v(158f, 9f, 0f), Vector3.one * 10f, horizon);
+        Sphere(R, "Event horizon", v(158f, 9f, 0f), Vector3.one * 10f, horizonMat);
 
         // ============ ESCAPE SHIP ============
-        GameObject shipInst = PrefabUtility.InstantiatePrefab(ship, R) as GameObject;
-        if (shipInst == null) shipInst = Object.Instantiate(ship, R);
-        shipInst.name = "StarSparrow - escape craft (preview)";
-        shipInst.transform.localPosition = v(87.5f, 0.15f, 0f);
-        shipInst.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
+        GameObject shipInst = Spawn(ship, R, "StarSparrow - escape craft (preview)");
+        if (shipInst != null)
+        {
+            shipInst.transform.localPosition = v(87.5f, 0.15f, 0f);
+            shipInst.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
+        }
 
         // ============ MONSTER (static preview) ============
-        GameObject monsterInst = PrefabUtility.InstantiatePrefab(monster, R) as GameObject;
-        if (monsterInst == null) monsterInst = Object.Instantiate(monster, R);
-        monsterInst.name = "The Listener (preview)";
-        monsterInst.transform.localPosition = v(21f, 0f, 0f);
-        monsterInst.transform.localScale = new Vector3(2.15f, 2.75f, 2.15f);
-
-        Transform[] monsterTransforms = monsterInst.GetComponentsInChildren<Transform>(true);
-        for (int i = 0; i < monsterTransforms.Length; i++)
+        GameObject monsterInst = Spawn(monster, R, "The Listener (preview)");
+        if (monsterInst != null)
         {
-            string tName = monsterTransforms[i].name;
-            if (tName == "Character1_Spine" || tName == "Character1_Spine1")
-                monsterTransforms[i].localScale = new Vector3(1.1f, 1.55f, 1.1f);
-            else if (tName == "Character1_Spine2")
-                monsterTransforms[i].localScale = new Vector3(1.08f, 1.45f, 1.08f);
-            else if (tName == "Character1_Neck")
-                monsterTransforms[i].localRotation = monsterTransforms[i].localRotation * Quaternion.Euler(28f, 48f, -38f);
-            else if (tName == "Character1_Head")
-                monsterTransforms[i].localRotation = monsterTransforms[i].localRotation * Quaternion.Euler(-12f, 22f, 16f);
+            monsterInst.transform.localPosition = v(21f, 0f, 0f);
+            monsterInst.transform.localScale = new Vector3(2.15f, 2.75f, 2.15f);
+
+            Transform[] monsterTransforms = monsterInst.GetComponentsInChildren<Transform>(true);
+            for (int i = 0; i < monsterTransforms.Length; i++)
+            {
+                string tName = monsterTransforms[i].name;
+                if (tName == "Character1_Spine" || tName == "Character1_Spine1")
+                    monsterTransforms[i].localScale = new Vector3(1.1f, 1.55f, 1.1f);
+                else if (tName == "Character1_Spine2")
+                    monsterTransforms[i].localScale = new Vector3(1.08f, 1.45f, 1.08f);
+                else if (tName == "Character1_Neck")
+                    monsterTransforms[i].localRotation = monsterTransforms[i].localRotation * Quaternion.Euler(28f, 48f, -38f);
+                else if (tName == "Character1_Head")
+                    monsterTransforms[i].localRotation = monsterTransforms[i].localRotation * Quaternion.Euler(-12f, 22f, 16f);
+            }
         }
 
         // ============ POWER CORES (static preview) ============
         Vector3[] corePositions = { v(8f, 0.25f, 12f), v(8f, 0.25f, -12f), v(18f, 0.25f, 6.5f) };
         for (int i = 0; i < corePositions.Length; i++)
         {
-            GameObject cell = Object.Instantiate(cells[i % cells.Length], R);
-            cell.name = "Power core " + (i + 1) + " (preview)";
+            GameObject cell = Spawn(cells[i % cells.Length], R, "Power core " + (i + 1) + " (preview)");
+            if (cell == null) continue;
             cell.transform.localPosition = corePositions[i];
             cell.transform.localScale = Vector3.one * 0.8f;
         }
@@ -378,14 +378,22 @@ public static class EchoSceneBuilder
 
     // ---- Geometry primitives ----
 
-    private static GameObject PlaceModule(GameObject prefab, Transform parent, Vector3 pos, float yaw, string label)
+    /// <summary>Instantiates a prefab (keeping the prefab link when possible). Null-safe.</summary>
+    private static GameObject Spawn(GameObject prefab, Transform parent, string name)
     {
         if (prefab == null) return null;
         GameObject go = PrefabUtility.InstantiatePrefab(prefab, parent) as GameObject;
         if (go == null) go = Object.Instantiate(prefab, parent);
+        go.name = name;
+        return go;
+    }
+
+    private static GameObject PlaceModule(GameObject prefab, Transform parent, Vector3 pos, float yaw, string label)
+    {
+        GameObject go = Spawn(prefab, parent, label);
+        if (go == null) return null;
         go.transform.localPosition = pos;
         go.transform.localRotation = Quaternion.Euler(0f, yaw, 0f);
-        go.name = label;
         return go;
     }
 
@@ -426,6 +434,12 @@ public static class EchoSceneBuilder
 
         Vector3 sourceCenter = parent.InverseTransformPoint(bounds.center);
         Vector3 sourceSize = bounds.size;
+        if (sourceSize.y < 0.0001f || sourceSize.x < 0.0001f && sourceSize.z < 0.0001f)
+        {
+            Object.DestroyImmediate(module);
+            return;
+        }
+
         bool longAxisIsZ = sourceSize.z >= sourceSize.x;
         int longAxis = longAxisIsZ ? 2 : 0;
         Vector3 scale = Vector3.one;
@@ -485,40 +499,31 @@ public static class EchoSceneBuilder
         }
     }
 
+    private static GameObject Primitive(PrimitiveType type, Transform parent, string name, Vector3 pos, Vector3 scale, Material mat)
+    {
+        GameObject go = GameObject.CreatePrimitive(type);
+        go.name = name;
+        go.transform.SetParent(parent, false);
+        go.transform.localPosition = pos;
+        go.transform.localScale = scale;
+        go.GetComponent<Renderer>().sharedMaterial = mat;
+        Object.DestroyImmediate(go.GetComponent<Collider>());
+        return go;
+    }
+
     private static GameObject Block(Transform parent, string name, Vector3 pos, Vector3 scale, Material mat)
     {
-        GameObject block = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        block.name = name;
-        block.transform.SetParent(parent, false);
-        block.transform.localPosition = pos;
-        block.transform.localScale = scale;
-        block.GetComponent<Renderer>().sharedMaterial = mat;
-        Object.DestroyImmediate(block.GetComponent<Collider>());
-        return block;
+        return Primitive(PrimitiveType.Cube, parent, name, pos, scale, mat);
     }
 
     private static GameObject Sphere(Transform parent, string name, Vector3 pos, Vector3 scale, Material mat)
     {
-        GameObject sphere = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-        sphere.name = name;
-        sphere.transform.SetParent(parent, false);
-        sphere.transform.localPosition = pos;
-        sphere.transform.localScale = scale;
-        sphere.GetComponent<Renderer>().sharedMaterial = mat;
-        Object.DestroyImmediate(sphere.GetComponent<Collider>());
-        return sphere;
+        return Primitive(PrimitiveType.Sphere, parent, name, pos, scale, mat);
     }
 
     private static GameObject Cylinder(Transform parent, string name, Vector3 pos, Vector3 scale, Material mat)
     {
-        GameObject cyl = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-        cyl.name = name;
-        cyl.transform.SetParent(parent, false);
-        cyl.transform.localPosition = pos;
-        cyl.transform.localScale = scale;
-        cyl.GetComponent<Renderer>().sharedMaterial = mat;
-        Object.DestroyImmediate(cyl.GetComponent<Collider>());
-        return cyl;
+        return Primitive(PrimitiveType.Cylinder, parent, name, pos, scale, mat);
     }
 
     private static void Sign(Transform parent, Material mat, string text, Vector3 pos, float rotation)
@@ -541,13 +546,6 @@ public static class EchoSceneBuilder
 
     private static void CreateMarker(Transform parent, string name, Vector3 pos, Material mat)
     {
-        GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Cube);
-        marker.name = name + " (preview marker)";
-        marker.transform.SetParent(parent, false);
-        marker.transform.localPosition = pos;
-        marker.transform.localScale = v(0.52f, 0.62f, 0.52f);
-        marker.GetComponent<Renderer>().sharedMaterial = mat;
-        Object.DestroyImmediate(marker.GetComponent<Collider>());
+        Primitive(PrimitiveType.Cube, parent, name + " (preview marker)", pos, v(0.52f, 0.62f, 0.52f), mat);
     }
 }
-
