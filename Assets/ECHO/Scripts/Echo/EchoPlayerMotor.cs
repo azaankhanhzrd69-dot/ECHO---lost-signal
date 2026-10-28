@@ -1,3 +1,4 @@
+using Echo.Shared;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -70,7 +71,7 @@ public sealed class EchoPlayerMotor : MonoBehaviour
 
     private void Update()
     {
-        if (!controlsEnabled || Keyboard.current == null || Mouse.current == null)
+        if (!controlsEnabled || EchoEvents.InputLocked || Keyboard.current == null || Mouse.current == null)
             return;
 
         Vector2 look = Mouse.current.delta.ReadValue() * 0.08f;

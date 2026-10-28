@@ -9,10 +9,20 @@ namespace Echo.Shared
     [CreateAssetMenu(fileName = "GameTuning", menuName = "ECHO/Game Tuning")]
     public class GameTuning : ScriptableObject
     {
-        [Header("Noise - Loudness (0..1 scale)")]
+        [Header("Noise - Loudness (0..1 scale, where 1.0 represents full hearing radius)")]
         [Min(0f)] public float crouchLoudness = NoiseLevel.Crouch;
         [Min(0f)] public float walkLoudness = NoiseLevel.Walk;
         [Min(0f)] public float runLoudness = NoiseLevel.Run;
+
+        [Header("Noise - Footstep Spacing (metres)")]
+        [Tooltip("Horizontal distance in metres between footstep noises while crouching.")]
+        [Min(0.1f)] public float crouchStepDistance = 1.2f;
+
+        [Tooltip("Horizontal distance in metres between footstep noises while walking.")]
+        [Min(0.1f)] public float walkStepDistance = 1.8f;
+
+        [Tooltip("Horizontal distance in metres between footstep noises while running.")]
+        [Min(0.1f)] public float runStepDistance = 2.2f;
 
         [Header("Noise - Footstep Intervals (seconds)")]
         [Min(0f)] public float footstepIntervalCrouch = 0.9f;

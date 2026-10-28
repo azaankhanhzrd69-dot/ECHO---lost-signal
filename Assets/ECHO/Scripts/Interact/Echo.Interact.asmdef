@@ -2,7 +2,9 @@
     "name": "Echo.Interact",
     "rootNamespace": "Echo.Interact",
     "references": [
-        "Echo.Shared"
+        "Echo.Shared",
+        "Unity.InputSystem",
+        "Unity.TextMeshPro"
     ],
     "includePlatforms": [],
     "excludePlatforms": [],

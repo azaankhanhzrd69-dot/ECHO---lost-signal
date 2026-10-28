@@ -111,6 +111,25 @@ namespace Echo.Shared
             PlayerCaught?.Invoke();
         }
 
+        // ── Input Lock ────────────────────────────────────────────────────────────
+        // True while any system (hide minigame, cutscene, keypad) owns player input.
+        // Set via LockInput / UnlockInput; read by motor, interactor, and UI.
+
+        /// <summary>
+        /// True while player input (movement, camera, interaction) is locked.
+        /// Written by: Core hide controller and future cutscene/keypad systems.
+        /// Read by: EchoPlayerMotor, Interactor, and any system that must pause on input lock.
+        /// </summary>
+        public static bool InputLocked { get; private set; }
+
+        /// <summary>Locks all player input. Call when a hide/cutscene/minigame begins.</summary>
+        public static void LockInput() { InputLocked = true; }
+
+        /// <summary>Unlocks all player input. Call when control returns to the player.</summary>
+        public static void UnlockInput() { InputLocked = false; }
+
+        // ──────────────────────────────────────────────────────────────────────────
+
         /// <summary>
         /// Clears all subscribed delegates from every event in this hub.
         /// </summary>
@@ -122,6 +141,7 @@ namespace Echo.Shared
             HideFinished = null;
             MonsterStateChanged = null;
             PlayerCaught = null;
+            InputLocked = false;
         }
 
         /// <summary>

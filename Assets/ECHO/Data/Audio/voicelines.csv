@@ -1,0 +1,8 @@
+id,speaker,text,file,trigger_beat,delay
+boarding_01,John,"Mission Control, Star Command 141 is on board the StarGazer. I repeat, I have boarded the StarGazer!",,Boarding,0
+boarding_02,MissionControl,"Roger that Star 141. Remember. Your task is to relay the information about Task Force 11, and retrieve the reports of the StarGazer's latest assignment.",,Boarding,6
+boarding_03,John,"Roger that, Sir. Star Command 141 is Oscar Mike.",,Boarding,12
+boarding_04,John,"Damn this place is cold",,Boarding,16
+medbay_01,John,"Dear God",,MedBay,1
+medbay_02,John,"I must get out of here",,MedBay,3
+

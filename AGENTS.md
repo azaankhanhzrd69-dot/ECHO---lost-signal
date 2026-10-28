@@ -1,6 +1,6 @@
 # AGENTS.md: rules for every AI agent in this repo
 
-Applies to Gemini 3.8 Flash (Antigravity) and Nemotron 3.5 Lightning alike. Read this and `docs/STORY.md` before every task.
+Applies to all models. Read this and `docs/STORY.md` before every task.
 
 ## Project
 ECHO: Lost Signal is a first-person horror game in Unity (URP, Windows). The monster is eyeless and hunts by sound. Walking, running and crouching make noise. Story beats and tasks live in `BUILDSPEC.md`. The story in `docs/STORY.md` is final.

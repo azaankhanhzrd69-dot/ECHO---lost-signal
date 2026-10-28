@@ -1,0 +1,17 @@
+id,file,trigger_beat,notes
+sfx_ambience_corridor,,Boarding,Low hum and atmospheric station drone
+sfx_ambience_medbay,,MedBay,Eerie medbay drone and flickering fluorescent buzz
+sfx_ambience_reactor,,ReactorEmpty,Deep electrical hum and reactor room drone
+sfx_footstep_walk,,NONE,Player footstep walk sound
+sfx_footstep_run,,NONE,Player footstep sprint sound
+sfx_footstep_crouch,,NONE,Player footstep crouch shuffle sound
+sfx_door_blast_open,,Keypad,Decompression chamber / blast door slide open
+sfx_door_blast_close,,Lunge,MedBay exit door slam shut and lock
+sfx_keypad_beep,,Keypad,Keypad button press beep
+sfx_keypad_granted,,Keypad,Keypad access granted confirmation chime
+sfx_keypad_denied,,Keypad,Keypad error buzz
+sfx_locker_door,,HideIntro,Locker metal door open and shut
+sfx_locker_bang,,HideIntro,Monster pounding and banging on locker exterior
+sfx_radio_static,,NONE,Radio room broadcast static and tuner noise
+sfx_morse_beep,,NONE,Morse key short/long tone beep
+
