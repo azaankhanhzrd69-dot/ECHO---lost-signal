@@ -35,6 +35,12 @@ public sealed class EchoCreature : MonoBehaviour
     private Vector3 patrolPoint;
     private float investigationTime;
     private float patrolTimer;
+    [SerializeField] private float waypointArrivalDistance = 1.1f;
+    [SerializeField] private float waypointWaitSeconds = 1f;
+    [SerializeField] private float waypointStuckTimeout = 3f;
+    private Transform[] configuredPatrolWaypoints = new Transform[0];
+    private float waypointWaitTimer;
+    private float waypointStuckTimer;
     private float animationTime;
     private float chaseBlend;
     private int patrolIndex;
@@ -71,6 +77,40 @@ public sealed class EchoCreature : MonoBehaviour
         warningClip = warningAlert;
         BuildBody(modelPrefab, materialTemplate);
         patrolPoint = game.GetRoutePosition(4);
+    }
+
+    public void ConfigurePatrolWaypoints(Transform[] waypoints)
+    {
+        if (waypoints == null || waypoints.Length == 0)
+        {
+            configuredPatrolWaypoints = new Transform[0];
+            return;
+        }
+
+        for (int i = 0; i < waypoints.Length; i++)
+        {
+            if (waypoints[i] == null)
+                throw new System.InvalidOperationException("Monster patrol waypoint references must not be null.");
+        }
+
+        configuredPatrolWaypoints = waypoints;
+        patrolIndex = 0;
+        float nearestDistance = float.PositiveInfinity;
+        for (int i = 0; i < configuredPatrolWaypoints.Length; i++)
+        {
+            Vector3 candidate = game.GetLocalRoutePosition(configuredPatrolWaypoints[i]);
+            float distance = (transform.localPosition - candidate).sqrMagnitude;
+            if (distance < nearestDistance)
+            {
+                nearestDistance = distance;
+                patrolIndex = i;
+            }
+        }
+
+        patrolPoint = game.GetLocalRoutePosition(configuredPatrolWaypoints[patrolIndex]);
+        respawnPosition = transform.localPosition;
+        waypointWaitTimer = 0f;
+        waypointStuckTimer = 0f;
     }
 
     private Transform spineTransform;
@@ -294,19 +334,39 @@ public sealed class EchoCreature : MonoBehaviour
             }
         }
 
+        bool hasConfiguredRoute = configuredPatrolWaypoints.Length > 0;
         if (!investigating)
         {
-            patrolTimer -= Time.deltaTime;
-            if (patrolTimer <= 0f || Vector3.Distance(transform.localPosition, patrolPoint) < 1.5f)
+            if (hasConfiguredRoute)
             {
-                patrolIndex = (patrolIndex + 1) % 4;
-                patrolPoint = game.GetRoutePosition(patrolIndex == 0 ? 3 : patrolIndex == 1 ? 5 : patrolIndex == 2 ? 2 : 4);
-                patrolTimer = 4f;
+                if (waypointWaitTimer > 0f)
+                {
+                    waypointWaitTimer = Mathf.Max(0f, waypointWaitTimer - Time.deltaTime);
+                }
+                else
+                {
+                    patrolPoint = game.GetLocalRoutePosition(configuredPatrolWaypoints[patrolIndex]);
+                    if (Vector3.Distance(transform.localPosition, patrolPoint) <= waypointArrivalDistance)
+                    {
+                        waypointWaitTimer = waypointWaitSeconds;
+                        patrolIndex = (patrolIndex + 1) % configuredPatrolWaypoints.Length;
+                    }
+                }
+            }
+            else
+            {
+                patrolTimer -= Time.deltaTime;
+                if (patrolTimer <= 0f || Vector3.Distance(transform.localPosition, patrolPoint) < 1.5f)
+                {
+                    patrolIndex = (patrolIndex + 1) % 4;
+                    patrolPoint = game.GetRoutePosition(patrolIndex == 0 ? 3 : patrolIndex == 1 ? 5 : patrolIndex == 2 ? 2 : 4);
+                    patrolTimer = 4f;
+                }
             }
         }
 
         Vector3 target = investigating ? investigationPoint : patrolPoint;
-        if (!investigating || distance > 8f)
+        if (!hasConfiguredRoute && (!investigating || distance > 8f))
         {
             int nextNode = game.GetNextRouteNode(transform.localPosition, target);
             if (nextNode >= 0 && Vector3.Distance(transform.localPosition, target) > 2.2f)
@@ -324,6 +384,26 @@ public sealed class EchoCreature : MonoBehaviour
         {
             movement = movement.normalized * speed * Time.deltaTime;
             movementController.Move(transform.parent.TransformDirection(movement));
+        }
+
+        if (hasConfiguredRoute && !investigating && waypointWaitTimer <= 0f)
+        {
+            float movedDistance = Vector3.Distance(oldPosition, transform.localPosition);
+            float targetDistance = Vector3.Distance(transform.localPosition, patrolPoint);
+            if (targetDistance > waypointArrivalDistance && movedDistance < speed * Time.deltaTime * 0.1f)
+            {
+                waypointStuckTimer += Time.deltaTime;
+                if (waypointStuckTimer >= waypointStuckTimeout)
+                {
+                    patrolIndex = (patrolIndex + 1) % configuredPatrolWaypoints.Length;
+                    patrolPoint = game.GetLocalRoutePosition(configuredPatrolWaypoints[patrolIndex]);
+                    waypointStuckTimer = 0f;
+                }
+            }
+            else
+            {
+                waypointStuckTimer = 0f;
+            }
         }
 
         Vector3 direction = transform.localPosition - oldPosition;
@@ -384,7 +464,8 @@ public sealed class EchoCreature : MonoBehaviour
         if (revealed && Time.time > revealUntil)
             revealed = false;
 
-        SetVisible(revealed || investigating || distance < 9f);
+        SetVisible(revealed || investigating || distance < 9f ||
+            (game.IsTestArena && hasConfiguredRoute));
         SetAnimation(investigating);
     }
 
@@ -513,8 +594,14 @@ public sealed class EchoCreature : MonoBehaviour
         investigating = false;
         wasInvestigating = false;
         patrolTimer = 0f;
-        patrolIndex = 0;
-        patrolPoint = game.GetRoutePosition(4);
+        patrolIndex = configuredPatrolWaypoints.Length > 0
+            ? FindNearestConfiguredWaypoint(respawnPosition)
+            : 0;
+        patrolPoint = configuredPatrolWaypoints.Length > 0
+            ? game.GetLocalRoutePosition(configuredPatrolWaypoints[patrolIndex])
+            : game.GetRoutePosition(4);
+        waypointWaitTimer = 0f;
+        waypointStuckTimer = 0f;
         revealed = false;
         SetVisible(false);
         chaseBlend = 0f;
@@ -523,8 +610,56 @@ public sealed class EchoCreature : MonoBehaviour
         SetAnimation(false);
     }
 
+    private int FindNearestConfiguredWaypoint(Vector3 position)
+    {
+        int nearestIndex = 0;
+        float nearestDistance = float.PositiveInfinity;
+        for (int i = 0; i < configuredPatrolWaypoints.Length; i++)
+        {
+            Vector3 candidate = game.GetLocalRoutePosition(configuredPatrolWaypoints[i]);
+            float distance = (position - candidate).sqrMagnitude;
+            if (distance < nearestDistance)
+            {
+                nearestDistance = distance;
+                nearestIndex = i;
+            }
+        }
+
+        return nearestIndex;
+    }
+
     public void PrepareRespawnAfterDeath(Vector3 deathPosition)
     {
+        if (configuredPatrolWaypoints.Length > 0)
+        {
+            int farthestWaypoint = 0;
+            float farthestDistance = -1f;
+            for (int i = 0; i < configuredPatrolWaypoints.Length; i++)
+            {
+                Vector3 candidate = game.GetLocalRoutePosition(configuredPatrolWaypoints[i]);
+                float distance = (candidate - deathPosition).sqrMagnitude;
+                if (distance > farthestDistance)
+                {
+                    farthestDistance = distance;
+                    farthestWaypoint = i;
+                }
+            }
+
+            patrolIndex = farthestWaypoint;
+            respawnPosition = game.GetLocalRoutePosition(configuredPatrolWaypoints[farthestWaypoint]);
+            SetCreaturePosition(respawnPosition);
+            investigationTime = 0f;
+            investigating = false;
+            wasInvestigating = false;
+            patrolTimer = 0f;
+            patrolPoint = respawnPosition;
+            waypointWaitTimer = 0f;
+            waypointStuckTimer = 0f;
+            revealed = false;
+            SetVisible(false);
+            return;
+        }
+
         int selectedNode = -1;
         List<int> candidates = new List<int>(RespawnRouteNodes.Length);
         for (int i = 0; i < RespawnRouteNodes.Length; i++)

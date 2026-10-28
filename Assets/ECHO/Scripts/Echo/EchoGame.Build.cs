@@ -9,7 +9,18 @@ public sealed partial class EchoGame : MonoBehaviour
 
     private void BuildGame()
     {
-        if (!useBakedStation)
+        if (testArenaMode)
+        {
+            RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
+            RenderSettings.ambientLight = new Color(0.06f, 0.075f, 0.09f);
+            RenderSettings.ambientIntensity = 0.8f;
+            RenderSettings.fog = false;
+            CreateMaterials();
+            LoadStationKit();
+            worldRoot = new GameObject("W-06 Test Arena").transform;
+            BuildTestArena();
+        }
+        else if (!useBakedStation)
         {
             Camera oldCamera = Camera.main;
             if (oldCamera != null)
@@ -52,7 +63,14 @@ public sealed partial class EchoGame : MonoBehaviour
         BuildCreature();
         BuildAudio();
 
-        if (!useBakedStation)
+        if (testArenaMode)
+        {
+            state = GameState.Playing;
+            playerMotor.SetControlsEnabled(true);
+            if (!testMonsterEnabled)
+                AddInteractable("HIDE", 0, "Enter locker", new Vector3(2.15f, 0.1f, 0f), false);
+        }
+        else if (!useBakedStation)
         {
             AddInteractable("CORE", 0, "Take power core", new Vector3(8f, 0.25f, 12f), true);
             AddInteractable("CORE", 1, "Take power core", new Vector3(8f, 0.25f, -12f), true);
@@ -1141,7 +1159,7 @@ public sealed partial class EchoGame : MonoBehaviour
     {
         player = new GameObject("You - Echo operator");
         player.transform.SetParent(worldRoot, false);
-        player.transform.localPosition = SpawnPoint;
+        player.transform.localPosition = testArenaMode ? testPlayerSpawn : SpawnPoint;
         characterController = player.AddComponent<CharacterController>();
         characterController.height = 1.75f;
         characterController.radius = 0.34f;
@@ -1184,11 +1202,64 @@ public sealed partial class EchoGame : MonoBehaviour
 
     private void BuildCreature()
     {
+        if (testArenaMode && !testMonsterEnabled)
+            return;
+        if (testArenaMode && (testPatrolWaypoints == null || testPatrolWaypoints.Length == 0))
+            throw new System.InvalidOperationException("The W-06 monster arena requires at least one assigned patrol waypoint.");
+
         GameObject creatureObject = new GameObject("The Listener");
         creatureObject.transform.SetParent(worldRoot, false);
-        creatureObject.transform.localPosition = new Vector3(21f, 0f, 0f);
+        creatureObject.transform.localPosition = testArenaMode
+            ? testMonsterSpawn
+            : new Vector3(21f, 0f, 0f);
         creature = creatureObject.AddComponent<EchoCreature>();
         creature.Initialize(this, monsterPrefab, materialTemplate, monsterFootstepLoopClip, monsterProximityRoarClip, monsterDeathRoarClip, footstepClips, voiceAlerts[2]);
+        if (testArenaMode)
+        {
+            creature.ConfigurePatrolWaypoints(testPatrolWaypoints);
+            creature.SetVisible(true);
+        }
+    }
+
+    private void BuildTestArena()
+    {
+        if (testMonsterEnabled)
+        {
+            MakeBlock("Test floor", new Vector3(0f, -0.25f, 0f), new Vector3(52f, 0.5f, 6f), floorMaterial, true);
+            MakeBlock("North bulkhead", new Vector3(0f, 2f, 3f), new Vector3(52f, 4f, 0.5f), wallMaterial, true);
+            MakeBlock("South bulkhead", new Vector3(0f, 2f, -3f), new Vector3(52f, 4f, 0.5f), wallMaterial, true);
+            MakeBlock("West bulkhead", new Vector3(-26f, 2f, 0f), new Vector3(0.5f, 4f, 6f), wallMaterial, true);
+            MakeBlock("East bulkhead", new Vector3(26f, 2f, 0f), new Vector3(0.5f, 4f, 6f), wallMaterial, true);
+            MakeBlock("Passage north wall", new Vector3(6f, 2f, 2.25f), new Vector3(0.6f, 4f, 1.5f), wallMaterial, true);
+            MakeBlock("Passage south wall", new Vector3(6f, 2f, -2.25f), new Vector3(0.6f, 4f, 1.5f), wallMaterial, true);
+            MakeBlock("Passage lintel", new Vector3(6f, 3.65f, 0f), new Vector3(0.6f, 0.7f, 3f), trimMaterial, true);
+            AddTestLight(new Vector3(-12f, 3.2f, 0f), new Color(0.2f, 0.72f, 0.92f));
+            AddTestLight(new Vector3(15f, 3.2f, 0f), new Color(0.92f, 0.36f, 0.16f));
+        }
+        else
+        {
+            MakeBlock("Hide test floor", new Vector3(0f, -0.25f, 0f), new Vector3(18f, 0.5f, 16f), floorMaterial, true);
+            MakeBlock("North wall", new Vector3(0f, 2f, 8f), new Vector3(18f, 4f, 0.5f), wallMaterial, true);
+            MakeBlock("South wall", new Vector3(0f, 2f, -8f), new Vector3(18f, 4f, 0.5f), wallMaterial, true);
+            MakeBlock("West wall", new Vector3(-9f, 2f, 0f), new Vector3(0.5f, 4f, 16f), wallMaterial, true);
+            MakeBlock("East wall", new Vector3(9f, 2f, 0f), new Vector3(0.5f, 4f, 16f), wallMaterial, true);
+            MakeBlock("Locker shell", new Vector3(2.8f, 1.25f, 0f), new Vector3(1.1f, 2.5f, 1.2f), trimMaterial, true);
+            MakeBlock("Locker door", new Vector3(2.22f, 1.25f, 0f), new Vector3(0.08f, 2.25f, 0.94f), brightMaterial, false);
+            AddTestLight(new Vector3(0f, 3.2f, 1f), new Color(0.2f, 0.72f, 0.92f));
+        }
+    }
+
+    private void AddTestLight(Vector3 position, Color color)
+    {
+        GameObject lightObject = new GameObject("Test arena light");
+        lightObject.transform.SetParent(worldRoot, false);
+        lightObject.transform.localPosition = position;
+        Light testLight = lightObject.AddComponent<Light>();
+        testLight.type = LightType.Point;
+        testLight.color = color;
+        testLight.range = 18f;
+        testLight.intensity = 4f;
+        testLight.shadows = LightShadows.Soft;
     }
 
     private void BuildEscapeShip()
