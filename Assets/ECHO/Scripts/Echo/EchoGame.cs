@@ -14,12 +14,13 @@ public sealed class EchoGame : MonoBehaviour
         SignalPuzzle,
         Choice,
         Paused,
+        Dying,
         Dead,
         Ending
     }
 
     private static readonly Vector3 SpawnPoint = new Vector3(-25f, 0.1f, 0f);
-    private static readonly Vector3 StationEditorOffset = new Vector3(-24f, 0f, 0f);
+    private static readonly Vector3 StationEditorOffset = Vector3.zero;
     private const float FlashlightCapacity = 60f;
     private static readonly Vector3[] RouteNodes =
     {
@@ -79,6 +80,11 @@ public sealed class EchoGame : MonoBehaviour
     private AudioSource voiceSource;
     private AudioClip doorClip;
     private AudioClip[] voiceAlerts = new AudioClip[3];
+    private AudioClip monsterFootstepLoopClip;
+    private AudioClip monsterProximityRoarClip;
+    private AudioClip monsterDeathRoarClip;
+    private AudioClip[] footstepClips = new AudioClip[10];
+    private float deathCutsceneTimer;
     private GameObject airlockBulkhead;
     private GameObject annexBulkhead;
     private GameObject escapeShip;
@@ -195,12 +201,12 @@ public sealed class EchoGame : MonoBehaviour
             oldLight.enabled = false;
 
         RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
-        RenderSettings.ambientLight = new Color(0.055f, 0.075f, 0.09f);
-        RenderSettings.ambientIntensity = 0.22f;
+        RenderSettings.ambientLight = new Color(0.0003f, 0.0005f, 0.0008f);
+        RenderSettings.ambientIntensity = 0.002f;
         RenderSettings.fog = true;
-        RenderSettings.fogColor = new Color(0.008f, 0.018f, 0.025f);
+        RenderSettings.fogColor = new Color(0.0002f, 0.0003f, 0.0005f);
         RenderSettings.fogMode = FogMode.Exponential;
-        RenderSettings.fogDensity = 0.018f;
+        RenderSettings.fogDensity = 0.065f;
         BuildNebulaSkybox();
 
         CreateMaterials();
@@ -279,6 +285,64 @@ public sealed class EchoGame : MonoBehaviour
         voiceAlerts[0] = LoadStationClip("EchoWarningDistant");
         voiceAlerts[1] = LoadStationClip("EchoWarningClose");
         voiceAlerts[2] = LoadStationClip("EchoWarningCritical");
+
+        monsterFootstepLoopClip = TryLoadStationClip("freesound_community-footsteps-75638")
+            ?? TryLoadStationClip("Monster_Footsteps");
+
+        monsterProximityRoarClip = TryLoadStationClip("dragon-studio-dragon-roar-364478")
+            ?? TryLoadStationClip("Dragon_Roar")
+            ?? TryLoadStationClip("freesound_community-monster-scream-death-101123")
+            ?? CreateFallbackScreamClip();
+
+        monsterDeathRoarClip = TryLoadStationClip("dragon-studio-epic-dragon-roar-364481")
+            ?? TryLoadStationClip("Epic_Dragon_Roar")
+            ?? monsterProximityRoarClip;
+
+        for (int i = 0; i < 10; i++)
+        {
+            string num = (i + 1).ToString("D2");
+            footstepClips[i] = TryLoadStationClip("Player_Footstep_" + num);
+        }
+    }
+
+    private static AudioClip TryLoadStationClip(string name)
+    {
+        try
+        {
+            return Resources.Load<AudioClip>("StationAudio/" + name);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private static AudioClip CreateFallbackScreamClip()
+    {
+        const int sampleRate = 44100;
+        const float duration = 2.4f;
+        int sampleCount = Mathf.CeilToInt(sampleRate * duration);
+        AudioClip clip = AudioClip.Create("MonsterRoarFallback", sampleCount, 1, sampleRate, false);
+        float[] samples = new float[sampleCount];
+
+        for (int i = 0; i < sampleCount; i++)
+        {
+            float t = (float)i / sampleRate;
+            float progress = t / duration;
+            float env = t < 0.08f ? (t / 0.08f) : (t > 1.8f ? Mathf.Clamp01((duration - t) / 0.6f) : 1f);
+            float gutFreq = Mathf.Lerp(84f, 46f, progress);
+            float gut = Mathf.Sin(2f * Mathf.PI * gutFreq * t + Mathf.Sin(2f * Mathf.PI * 18f * t) * 2.4f);
+            float screechFreq = Mathf.Lerp(1180f, 440f, Mathf.Pow(progress, 0.65f));
+            float screech = Mathf.Sin(2f * Mathf.PI * screechFreq * t + Mathf.Sin(2f * Mathf.PI * 40f * t) * 3.8f);
+            float shriek = Mathf.Sin(2f * Mathf.PI * (screechFreq * 1.5f) * t);
+            float rasp = (Mathf.PerlinNoise(t * 3000f, 0.3f) * 2f - 1f) * 0.42f;
+
+            float mix = gut * 0.45f + screech * 0.45f + shriek * 0.2f + rasp;
+            samples[i] = Mathf.Clamp(mix * 1.6f, -0.92f, 0.92f) * env * 0.88f;
+        }
+
+        clip.SetData(samples, 0);
+        return clip;
     }
 
     private static AudioClip LoadStationClip(string name)
@@ -502,7 +566,7 @@ public sealed class EchoGame : MonoBehaviour
         if (sky.HasProperty("_Tint"))
             sky.SetColor("_Tint", Color.white);
         if (sky.HasProperty("_Exposure"))
-            sky.SetFloat("_Exposure", 1.35f);
+            sky.SetFloat("_Exposure", 0.12f);
         if (sky.HasProperty("_Mapping"))
             sky.SetFloat("_Mapping", 1f);
         RenderSettings.skybox = sky;
@@ -986,7 +1050,7 @@ public sealed class EchoGame : MonoBehaviour
             lights[i].enabled = true;
             lights[i].color = color;
             lights[i].range = Mathf.Max(lights[i].range, range);
-            lights[i].intensity = 0.72f;
+            lights[i].intensity = 0.04f;
             lights[i].shadows = LightShadows.None;
             corridorLights.Add(lights[i]);
         }
@@ -997,7 +1061,7 @@ public sealed class EchoGame : MonoBehaviour
             light.type = LightType.Point;
             light.color = color;
             light.range = range;
-            light.intensity = 0.72f;
+            light.intensity = 0.04f;
             light.shadows = LightShadows.None;
             corridorLights.Add(light);
         }
@@ -1083,12 +1147,13 @@ public sealed class EchoGame : MonoBehaviour
         flashlight.transform.localPosition = new Vector3(0.08f, -0.08f, 0.18f);
         Light torch = flashlight.AddComponent<Light>();
         torch.type = LightType.Spot;
-        torch.color = new Color(0.64f, 0.88f, 1f);
-        torch.range = 13f;
-        torch.spotAngle = 58f;
-        torch.intensity = 2.2f;
+        torch.color = new Color(0.72f, 0.88f, 1f);
+        torch.range = 8.5f;
+        torch.spotAngle = 44f;
+        torch.intensity = 1.85f;
         torch.shadows = LightShadows.Soft;
         playerMotor.SetFlashlight(torch);
+        playerMotor.SetFootstepAudio(footstepClips);
 
         EchoPulse pulse = player.AddComponent<EchoPulse>();
         pulse.Bind(playerCamera);
@@ -1100,7 +1165,7 @@ public sealed class EchoGame : MonoBehaviour
         creatureObject.transform.SetParent(worldRoot, false);
         creatureObject.transform.localPosition = new Vector3(21f, 0f, 0f);
         creature = creatureObject.AddComponent<EchoCreature>();
-        creature.Initialize(this, monsterPrefab, materialTemplate);
+        creature.Initialize(this, monsterPrefab, materialTemplate, monsterFootstepLoopClip, monsterProximityRoarClip, monsterDeathRoarClip, footstepClips, voiceAlerts[2]);
     }
 
     private void BuildEscapeShip()
@@ -1280,6 +1345,12 @@ public sealed class EchoGame : MonoBehaviour
             return;
         }
 
+        if (state == GameState.Dying)
+        {
+            UpdateDeathCutscene();
+            return;
+        }
+
         if (state == GameState.Dead)
         {
             if (Pressed(Key.Enter) || Pressed(Key.Space))
@@ -1357,7 +1428,7 @@ public sealed class EchoGame : MonoBehaviour
         float distance = Vector3.Distance(player.transform.localPosition, creature.transform.localPosition);
         UpdateThreatEffects(distance);
         if (distance < 1.45f)
-            Die();
+            TriggerDeathCutscene();
     }
 
     private static bool Pressed(Key key)
@@ -1443,7 +1514,7 @@ public sealed class EchoGame : MonoBehaviour
         SetRelayIndicators(false);
 
         foreach (Light light in corridorLights)
-            light.intensity = 0.72f;
+            light.intensity = 0.04f;
 
         activeInteractable = null;
         player.transform.localPosition = SpawnPoint;
@@ -1460,11 +1531,58 @@ public sealed class EchoGame : MonoBehaviour
         ShowMessage("Find three power cells. Their lit slots mark your progress at the reactor.");
     }
 
-    private void Die()
+    private void TriggerDeathCutscene()
     {
         if (state != GameState.Playing)
             return;
 
+        state = GameState.Dying;
+        deathCutsceneTimer = 2.4f;
+        playerMotor.SetControlsEnabled(false);
+        SetCursor(false);
+
+        Vector3 camPos = playerCamera.transform.position;
+        Vector3 camFwd = playerCamera.transform.forward;
+        camFwd.y = 0f;
+        if (camFwd.sqrMagnitude < 0.001f)
+            camFwd = player.transform.forward;
+        camFwd.Normalize();
+
+        Vector3 monsterWorldPos = camPos + camFwd * 0.82f;
+        monsterWorldPos.y = player.transform.position.y;
+        creature.SetCreaturePosition(worldRoot.InverseTransformPoint(monsterWorldPos));
+        creature.transform.rotation = Quaternion.LookRotation(-camFwd);
+        creature.SetVisible(true);
+        creature.TriggerJumpscareScream();
+    }
+
+    private void UpdateDeathCutscene()
+    {
+        deathCutsceneTimer -= Time.deltaTime;
+
+        Vector3 headPos = creature != null ? creature.HeadPosition : (playerCamera.transform.position + playerCamera.transform.forward);
+        Vector3 lookDir = (headPos - playerCamera.transform.position).normalized;
+        Quaternion targetLook = Quaternion.LookRotation(lookDir);
+
+        float shakeStrength = Mathf.Clamp01(deathCutsceneTimer / 1.6f) * 7.5f;
+        float shakeX = (Mathf.PerlinNoise(Time.time * 42f, 0.2f) - 0.5f) * shakeStrength;
+        float shakeY = (Mathf.PerlinNoise(0.5f, Time.time * 42f) - 0.5f) * shakeStrength;
+        float shakeZ = (Mathf.PerlinNoise(Time.time * 28f, Time.time * 28f) - 0.5f) * shakeStrength * 0.7f;
+
+        playerCamera.transform.rotation = targetLook * Quaternion.Euler(shakeX, shakeY, shakeZ);
+
+        if (playerMotor != null)
+        {
+            bool flicker = Mathf.Sin(Time.time * 45f) > -0.2f && Random.value > 0.15f;
+            playerMotor.SetFlashlightActive(flicker);
+        }
+
+        if (deathCutsceneTimer <= 0f)
+            Die();
+    }
+
+    private void Die()
+    {
         creature.PrepareRespawnAfterDeath(player.transform.localPosition);
         state = GameState.Dead;
         playerMotor.SetControlsEnabled(false);
@@ -1864,7 +1982,7 @@ public sealed class EchoGame : MonoBehaviour
         if (distance > 18f)
             lastVoiceAlertTier = 0;
 
-        float baseIntensity = powerRestored ? 1.15f : 0.72f;
+        float baseIntensity = powerRestored ? 0.28f : 0.04f;
         for (int i = 0; i < corridorLights.Count; i++)
         {
             Light light = corridorLights[i];
@@ -1901,6 +2019,7 @@ public sealed class EchoGame : MonoBehaviour
     }
 
     public bool IsCrouching { get { return isCrouching; } }
+    public bool FlashlightOn { get { return flashlightOn; } }
 
     public void RevealStation(Vector3 center, float radius, float duration)
     {
@@ -1952,6 +2071,9 @@ public sealed class EchoGame : MonoBehaviour
                 break;
             case GameState.Paused:
                 DrawPause();
+                break;
+            case GameState.Dying:
+                DrawDyingJumpscare();
                 break;
             case GameState.Dead:
                 DrawEndCard("THE DARK FOUND YOU", "The station goes quiet. Every echo led it closer.", "ENTER  /  TRY AGAIN");
@@ -2345,6 +2467,29 @@ public sealed class EchoGame : MonoBehaviour
         GUILayout.EndArea();
     }
 
+    private void DrawDyingJumpscare()
+    {
+        float pulse = Mathf.Sin(Time.time * 26f) * 0.25f + 0.5f;
+        Color old = GUI.color;
+        GUI.color = new Color(0.92f, 0.02f, 0.02f, pulse);
+        GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture, ScaleMode.StretchToFill);
+
+        float marginY = Screen.height * 0.16f;
+        float marginX = Screen.width * 0.12f;
+        GUI.color = new Color(0.02f, 0.01f, 0.01f, 0.88f);
+        GUI.DrawTexture(new Rect(0, 0, Screen.width, marginY), Texture2D.whiteTexture);
+        GUI.DrawTexture(new Rect(0, Screen.height - marginY, Screen.width, marginY), Texture2D.whiteTexture);
+        GUI.DrawTexture(new Rect(0, marginY, marginX, Screen.height - marginY * 2), Texture2D.whiteTexture);
+        GUI.DrawTexture(new Rect(Screen.width - marginX, marginY, marginX, Screen.height - marginY * 2), Texture2D.whiteTexture);
+
+        if (headingStyle != null)
+        {
+            GUI.color = new Color(1f, 0.25f, 0.25f, 0.95f);
+            GUI.Label(new Rect(0, Screen.height * 0.76f, Screen.width, 50), "SIGNAL TERMINATED", headingStyle);
+        }
+        GUI.color = old;
+    }
+
     private void DrawEndCard(string title, string body, string action)
     {
         DrawOverlay(new Color(0.005f, 0.012f, 0.02f, 0.88f));
@@ -2470,6 +2615,20 @@ public sealed class EchoPlayerMotor : MonoBehaviour
     private float cameraBob;
     private bool controlsEnabled;
     private float originalHeight;
+    private AudioSource playerAudioSource;
+    private AudioClip[] playerFootstepClips;
+    private float playerFootstepTimer;
+
+    public void SetFootstepAudio(AudioClip[] clips)
+    {
+        playerFootstepClips = clips;
+        if (playerAudioSource == null)
+        {
+            playerAudioSource = gameObject.AddComponent<AudioSource>();
+            playerAudioSource.spatialBlend = 0f;
+            playerAudioSource.playOnAwake = false;
+        }
+    }
 
     public void Initialize(EchoGame owner, CharacterController character)
     {
@@ -2551,6 +2710,21 @@ public sealed class EchoPlayerMotor : MonoBehaviour
         controller.Move(movement * Time.deltaTime);
 
         float movementAmount = input.magnitude;
+        if (movementAmount > 0.1f && controller.isGrounded && playerFootstepClips != null && playerFootstepClips.Length > 0)
+        {
+            playerFootstepTimer -= Time.deltaTime;
+            if (playerFootstepTimer <= 0f)
+            {
+                playerFootstepTimer = sprinting ? 0.32f : crouching ? 0.62f : 0.44f;
+                AudioClip clip = playerFootstepClips[Random.Range(0, playerFootstepClips.Length)];
+                if (clip != null && playerAudioSource != null)
+                {
+                    playerAudioSource.pitch = Random.Range(0.92f, 1.08f);
+                    playerAudioSource.PlayOneShot(clip, crouching ? 0.16f : sprinting ? 0.48f : 0.32f);
+                }
+            }
+        }
+
         cameraBob += Time.deltaTime * (sprinting ? 12f : 8f) * movementAmount;
         Vector3 cameraPosition = new Vector3(0f, controller.height * 0.5f + 0.65f, 0f);
         if (movementAmount > 0.05f && controller.isGrounded)
@@ -2585,8 +2759,22 @@ public sealed class EchoCreature : MonoBehaviour
     private AnimationMixerPlayable animationMixer;
     private AnimationClipPlayable idlePlayable;
     private AnimationClipPlayable runPlayable;
+    private AnimationClipPlayable ragePlayable;
     private AnimationClip idleClip;
     private AnimationClip runClip;
+    private AnimationClip rageClip;
+    private float rageWeight;
+    private float rageTimer;
+    private float nextRoarTime;
+    private bool wasInvestigating;
+    private AudioSource footstepSource;
+    private AudioSource screamSource;
+    private AudioClip footstepLoopClip;
+    private AudioClip proximityRoarClip;
+    private AudioClip deathRoarClip;
+    private AudioClip[] singleFootsteps;
+    private AudioClip warningClip;
+    private float discreteStepTimer;
     private Vector3 investigationPoint;
     private Vector3 patrolPoint;
     private float investigationTime;
@@ -2601,13 +2789,39 @@ public sealed class EchoCreature : MonoBehaviour
     private bool isVisible = true;
     private float revealUntil;
     public bool IsInvestigating { get { return investigating; } }
+    public Vector3 HeadPosition
+    {
+        get
+        {
+            return headTransform != null ? headTransform.position : transform.position + Vector3.up * 2.3f;
+        }
+    }
 
-    public void Initialize(EchoGame owner, GameObject modelPrefab, Material materialTemplate)
+    public void Initialize(
+        EchoGame owner,
+        GameObject modelPrefab,
+        Material materialTemplate,
+        AudioClip footstepLoopAudio,
+        AudioClip proximityRoarAudio,
+        AudioClip deathRoarAudio,
+        AudioClip[] individualSteps,
+        AudioClip warningAlert)
     {
         game = owner;
+        footstepLoopClip = footstepLoopAudio;
+        proximityRoarClip = proximityRoarAudio;
+        deathRoarClip = deathRoarAudio;
+        singleFootsteps = individualSteps;
+        warningClip = warningAlert;
         BuildBody(modelPrefab, materialTemplate);
         patrolPoint = game.GetRoutePosition(4);
     }
+
+    private Transform spineTransform;
+    private Transform spine1Transform;
+    private Transform spine2Transform;
+    private Transform neckTransform;
+    private Transform headTransform;
 
     private void BuildBody(GameObject modelPrefab, Material materialTemplate)
     {
@@ -2615,7 +2829,18 @@ public sealed class EchoCreature : MonoBehaviour
         model.name = "Monster Mutant 7";
         model.transform.localPosition = Vector3.zero;
         model.transform.localRotation = Quaternion.identity;
-        model.transform.localScale = Vector3.one * 1.65f;
+        model.transform.localScale = new Vector3(2.1f, 1.58f, 2.1f);
+
+        Transform[] allTransforms = model.GetComponentsInChildren<Transform>(true);
+        for (int i = 0; i < allTransforms.Length; i++)
+        {
+            string tName = allTransforms[i].name;
+            if (tName == "Character1_Spine") spineTransform = allTransforms[i];
+            else if (tName == "Character1_Spine1") spine1Transform = allTransforms[i];
+            else if (tName == "Character1_Spine2") spine2Transform = allTransforms[i];
+            else if (tName == "Character1_Neck") neckTransform = allTransforms[i];
+            else if (tName == "Character1_Head") headTransform = allTransforms[i];
+        }
         animator = model.GetComponent<Animator>();
         if (animator == null)
             throw new System.InvalidOperationException("The Monster Mutant 7 prefab is missing its Animator component.");
@@ -2632,18 +2857,40 @@ public sealed class EchoCreature : MonoBehaviour
         CreateAnimationGraph();
 
         movementController = gameObject.AddComponent<CharacterController>();
-        movementController.height = 2.8f;
-        movementController.radius = 0.48f;
-        movementController.center = new Vector3(0f, 1.4f, 0f);
+        movementController.height = 2.45f;
+        movementController.radius = 0.7f;
+        movementController.center = new Vector3(0f, 1.25f, 0f);
         movementController.slopeLimit = 45f;
         movementController.stepOffset = 0.3f;
         movementController.skinWidth = 0.06f;
         movementController.minMoveDistance = 0f;
+
+        footstepSource = gameObject.AddComponent<AudioSource>();
+        footstepSource.spatialBlend = 1f;
+        footstepSource.rolloffMode = AudioRolloffMode.Linear;
+        footstepSource.minDistance = 2.5f;
+        footstepSource.maxDistance = 35f;
+        footstepSource.playOnAwake = false;
+        footstepSource.dopplerLevel = 0f;
+        if (footstepLoopClip != null)
+        {
+            footstepSource.clip = footstepLoopClip;
+            footstepSource.loop = true;
+        }
+
+        screamSource = gameObject.AddComponent<AudioSource>();
+        screamSource.spatialBlend = 1f;
+        screamSource.rolloffMode = AudioRolloffMode.Linear;
+        screamSource.minDistance = 3.5f;
+        screamSource.maxDistance = 60f;
+        screamSource.playOnAwake = false;
+        screamSource.dopplerLevel = 0f;
+
         Light eyeGlow = gameObject.AddComponent<Light>();
         eyeGlow.type = LightType.Point;
         eyeGlow.color = new Color(1f, 0.04f, 0.015f);
-        eyeGlow.range = 3.5f;
-        eyeGlow.intensity = 1.4f;
+        eyeGlow.range = 3.8f;
+        eyeGlow.intensity = 1.6f;
         eyeGlow.shadows = LightShadows.None;
         SetVisible(false);
     }
@@ -2653,11 +2900,17 @@ public sealed class EchoCreature : MonoBehaviour
         AnimationClip[] clips = Resources.LoadAll<AnimationClip>("MonsterAnimations");
         for (int i = 0; i < clips.Length; i++)
         {
-            if (idleClip == null && clips[i].name.IndexOf("idle1", System.StringComparison.OrdinalIgnoreCase) >= 0)
+            string cName = clips[i].name;
+            if (idleClip == null && cName.IndexOf("idle1", System.StringComparison.OrdinalIgnoreCase) >= 0)
                 idleClip = clips[i];
-            if (runClip == null && clips[i].name.IndexOf("run1", System.StringComparison.OrdinalIgnoreCase) >= 0)
+            if (runClip == null && cName.IndexOf("run1", System.StringComparison.OrdinalIgnoreCase) >= 0)
                 runClip = clips[i];
+            if (rageClip == null && (cName.IndexOf("rage", System.StringComparison.OrdinalIgnoreCase) >= 0 || cName.IndexOf("attack", System.StringComparison.OrdinalIgnoreCase) >= 0))
+                rageClip = clips[i];
         }
+
+        if (rageClip == null)
+            rageClip = runClip;
 
         if (idleClip == null || runClip == null || idleClip.length <= 0f || runClip.length <= 0f)
             throw new System.InvalidOperationException(
@@ -2668,15 +2921,19 @@ public sealed class EchoCreature : MonoBehaviour
     {
         animationGraph = PlayableGraph.Create("Monster Mutant 7 animation");
         animationGraph.SetTimeUpdateMode(DirectorUpdateMode.GameTime);
-        animationMixer = AnimationMixerPlayable.Create(animationGraph, 2);
+        animationMixer = AnimationMixerPlayable.Create(animationGraph, 3);
         idlePlayable = AnimationClipPlayable.Create(animationGraph, idleClip);
         runPlayable = AnimationClipPlayable.Create(animationGraph, runClip);
+        ragePlayable = AnimationClipPlayable.Create(animationGraph, rageClip);
         idlePlayable.SetSpeed(0d);
         runPlayable.SetSpeed(0d);
+        ragePlayable.SetSpeed(0d);
         animationGraph.Connect(idlePlayable, 0, animationMixer, 0);
         animationGraph.Connect(runPlayable, 0, animationMixer, 1);
+        animationGraph.Connect(ragePlayable, 0, animationMixer, 2);
         animationMixer.SetInputWeight(0, 1f);
         animationMixer.SetInputWeight(1, 0f);
+        animationMixer.SetInputWeight(2, 0f);
         AnimationPlayableOutput output = AnimationPlayableOutput.Create(animationGraph, "Monster Mutant 7", animator);
         output.SetSourcePlayable(animationMixer);
         animationGraph.Play();
@@ -2754,17 +3011,27 @@ public sealed class EchoCreature : MonoBehaviour
             return;
 
         float distance = Vector3.Distance(transform.localPosition, game.PlayerPosition);
-        if (distance < (game.IsCrouching ? 7f : 14f))
+        float detectRange = game.IsCrouching ? 8.5f : 20f;
+        if (game.FlashlightOn)
+            detectRange += 8f;
+
+        if (distance < detectRange)
         {
             investigationPoint = game.PlayerPosition;
             investigating = true;
-            investigationTime = 12f;
+            investigationTime = 18f;
         }
 
         if (investigating)
         {
+            if (distance < 28f)
+            {
+                investigationPoint = game.PlayerPosition;
+                investigationTime = 16f;
+            }
+
             investigationTime -= Time.deltaTime;
-            if (investigationTime <= 0f && distance > 7f)
+            if (investigationTime <= 0f && distance > 10f)
             {
                 investigating = false;
                 patrolTimer = 0f;
@@ -2783,14 +3050,17 @@ public sealed class EchoCreature : MonoBehaviour
         }
 
         Vector3 target = investigating ? investigationPoint : patrolPoint;
-        int nextNode = game.GetNextRouteNode(transform.localPosition, target);
-        if (nextNode >= 0 && Vector3.Distance(transform.localPosition, target) > 2.2f)
-            target = game.GetRoutePosition(nextNode);
+        if (!investigating || distance > 8f)
+        {
+            int nextNode = game.GetNextRouteNode(transform.localPosition, target);
+            if (nextNode >= 0 && Vector3.Distance(transform.localPosition, target) > 2.2f)
+                target = game.GetRoutePosition(nextNode);
+        }
         target.y = transform.localPosition.y;
 
         float speed = investigating
-            ? distance < 5f ? 5.8f : 5f
-            : 1.65f;
+            ? (distance < 6f ? 7.5f : 6.85f)
+            : 2.35f;
         Vector3 oldPosition = transform.localPosition;
         Vector3 movement = target - oldPosition;
         movement.y = 0f;
@@ -2803,13 +3073,88 @@ public sealed class EchoCreature : MonoBehaviour
         Vector3 direction = transform.localPosition - oldPosition;
         direction.y = 0f;
         if (direction.sqrMagnitude > 0.001f)
-            transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(direction), Time.deltaTime * 6f);
+            transform.rotation = Quaternion.Slerp(transform.rotation, Quaternion.LookRotation(direction), Time.deltaTime * 12f);
+
+        bool isMoving = movement.sqrMagnitude > 0.0005f;
+        if (footstepLoopClip != null && footstepSource != null)
+        {
+            if (isMoving)
+            {
+                if (!footstepSource.isPlaying)
+                    footstepSource.Play();
+
+                float targetVol = investigating ? 0.95f : 0.65f;
+                footstepSource.volume = Mathf.MoveTowards(footstepSource.volume, targetVol, Time.deltaTime * 3.5f);
+                footstepSource.pitch = investigating ? 1.15f : 0.8f;
+            }
+            else
+            {
+                if (footstepSource.isPlaying)
+                {
+                    footstepSource.volume = Mathf.MoveTowards(footstepSource.volume, 0f, Time.deltaTime * 5f);
+                    if (footstepSource.volume <= 0.01f)
+                        footstepSource.Pause();
+                }
+            }
+        }
+        else if (singleFootsteps != null && singleFootsteps.Length > 0 && footstepSource != null)
+        {
+            if (isMoving)
+            {
+                discreteStepTimer -= Time.deltaTime;
+                if (discreteStepTimer <= 0f)
+                {
+                    discreteStepTimer = investigating ? 0.34f : 0.62f;
+                    AudioClip clip = singleFootsteps[Random.Range(0, singleFootsteps.Length)];
+                    if (clip != null)
+                    {
+                        footstepSource.pitch = Random.Range(0.42f, 0.52f);
+                        footstepSource.PlayOneShot(clip, investigating ? 0.95f : 0.7f);
+                    }
+                }
+            }
+            else
+            {
+                discreteStepTimer = 0.1f;
+            }
+        }
+
+        if (!wasInvestigating && investigating)
+            PlayRoar(0.9f);
+        else if (investigating && distance < 14f)
+            PlayRoar(0.9f);
+        wasInvestigating = investigating;
 
         if (revealed && Time.time > revealUntil)
             revealed = false;
 
         SetVisible(revealed || investigating || distance < 9f);
         SetAnimation(investigating);
+    }
+
+    private void LateUpdate()
+    {
+        // Wide, imposing, hunched predator posture that stays beneath the ceiling
+        if (spineTransform != null)
+        {
+            spineTransform.localScale = new Vector3(1.15f, 1.05f, 1.15f);
+            spineTransform.localRotation = spineTransform.localRotation * Quaternion.Euler(14f, 0f, 0f);
+        }
+        if (spine1Transform != null)
+        {
+            spine1Transform.localScale = new Vector3(1.12f, 1.03f, 1.12f);
+            spine1Transform.localRotation = spine1Transform.localRotation * Quaternion.Euler(10f, 0f, 0f);
+        }
+        if (spine2Transform != null)
+        {
+            spine2Transform.localScale = new Vector3(1.1f, 1.02f, 1.1f);
+        }
+
+        // Twisted, predatory head angle
+        if (neckTransform != null)
+            neckTransform.localRotation = neckTransform.localRotation * Quaternion.Euler(18f, 32f, -18f);
+        if (headTransform != null)
+            headTransform.localRotation = headTransform.localRotation * Quaternion.Euler(-8f, 14f, 10f);
     }
 
     private void SetAnimation(bool chasing)
@@ -2820,16 +3165,66 @@ public sealed class EchoCreature : MonoBehaviour
         animationTime += Time.deltaTime;
         idlePlayable.SetTime(animationTime % idleClip.length);
         runPlayable.SetTime(animationTime * 1.15f % runClip.length);
+        if (rageClip != null && rageClip.length > 0f)
+            ragePlayable.SetTime((animationTime * 1.3f) % rageClip.length);
+
+        if (rageTimer > 0f)
+        {
+            rageTimer -= Time.deltaTime;
+            rageWeight = Mathf.MoveTowards(rageWeight, 1f, Time.deltaTime * 6f);
+        }
+        else
+        {
+            rageWeight = Mathf.MoveTowards(rageWeight, 0f, Time.deltaTime * 3f);
+        }
+
         chaseBlend = Mathf.MoveTowards(chaseBlend, chasing ? 1f : 0f, Time.deltaTime * 3.5f);
-        animationMixer.SetInputWeight(0, 1f - chaseBlend);
-        animationMixer.SetInputWeight(1, chaseBlend);
+        float nonRage = 1f - rageWeight;
+        animationMixer.SetInputWeight(0, (1f - chaseBlend) * nonRage);
+        animationMixer.SetInputWeight(1, chaseBlend * nonRage);
+        animationMixer.SetInputWeight(2, rageWeight);
     }
 
     public void HearPulse(Vector3 source)
     {
         investigationPoint = source;
         investigating = true;
-        investigationTime = 8f;
+        investigationTime = 16f;
+        PlayRoar(0.95f);
+    }
+
+    public void PlayRoar(float volume = 0.9f)
+    {
+        if (Time.time < nextRoarTime)
+            return;
+
+        nextRoarTime = Time.time + 5.5f;
+        rageTimer = 1.6f;
+
+        if (screamSource != null)
+        {
+            screamSource.spatialBlend = 1.0f;
+            screamSource.pitch = Random.Range(0.92f, 1.06f);
+            if (proximityRoarClip != null)
+                screamSource.PlayOneShot(proximityRoarClip, volume);
+            else if (deathRoarClip != null)
+                screamSource.PlayOneShot(deathRoarClip, volume);
+        }
+    }
+
+    public void TriggerJumpscareScream()
+    {
+        rageTimer = 2.8f;
+        rageWeight = 1.0f;
+        if (screamSource != null)
+        {
+            screamSource.spatialBlend = 0.05f;
+            screamSource.pitch = 1.0f;
+            if (deathRoarClip != null)
+                screamSource.PlayOneShot(deathRoarClip, 1.0f);
+            else if (proximityRoarClip != null)
+                screamSource.PlayOneShot(proximityRoarClip, 1.0f);
+        }
     }
 
     public void Reveal(float duration)
@@ -2839,7 +3234,7 @@ public sealed class EchoCreature : MonoBehaviour
         SetVisible(true);
     }
 
-    private void SetVisible(bool visible)
+    public void SetVisible(bool visible)
     {
         if (isVisible == visible)
             return;
@@ -2851,16 +3246,24 @@ public sealed class EchoCreature : MonoBehaviour
 
     public void ResetCreature()
     {
+        if (footstepSource != null && footstepSource.isPlaying)
+            footstepSource.Stop();
+        if (screamSource != null && screamSource.isPlaying)
+            screamSource.Stop();
+
         SetCreaturePosition(respawnPosition);
         transform.rotation = Quaternion.identity;
         investigationTime = 0f;
         investigating = false;
+        wasInvestigating = false;
         patrolTimer = 0f;
         patrolIndex = 0;
         patrolPoint = game.GetRoutePosition(4);
         revealed = false;
         SetVisible(false);
         chaseBlend = 0f;
+        rageTimer = 0f;
+        rageWeight = 0f;
         SetAnimation(false);
     }
 
@@ -2902,7 +3305,7 @@ public sealed class EchoCreature : MonoBehaviour
         SetVisible(false);
     }
 
-    private void SetCreaturePosition(Vector3 position)
+    public void SetCreaturePosition(Vector3 position)
     {
         if (movementController != null)
             movementController.enabled = false;
