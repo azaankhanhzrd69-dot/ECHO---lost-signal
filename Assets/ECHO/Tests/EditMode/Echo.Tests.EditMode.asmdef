@@ -3,6 +3,7 @@
     "references": [
         "Echo.Core",
         "Echo.Shared",
+        "Echo.Interact",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

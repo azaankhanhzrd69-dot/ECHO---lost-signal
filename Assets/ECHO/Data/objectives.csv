@@ -1,0 +1,15 @@
+beat,showObjective,objectiveText,reminderText,reminderDelaySeconds
+Boarding,false,,,
+Vent,true,Find the vent to escape,true,15
+Keypad,Enter the keypad code to proceed,true,Enter the code,10
+MedBay,Locate the medical bay and check the supplies,true,Check the medbay,12
+Lunge,false,,,
+HideIntro,Find a hiding spot to survive the monster,true,Find a locker,8
+Sneak,Move quietly past the monster without being seen,true,Stay quiet,10
+ShuttleWreck,Repair the shuttle to escape the wreckage,true,Fix the shuttle,15
+ReactorEmpty,Restore power to the reactor core,true,Restore power,10
+CoreHunt,Survive the core hunt and locate all cores,true,Find the cores,12
+PowerOn,Activate the power system to progress,true,Turn on power,8
+Chase,Outrun the monster and reach the exit,true,Reach the exit,8
+Airlock,false,,,
+Ending,false,,,

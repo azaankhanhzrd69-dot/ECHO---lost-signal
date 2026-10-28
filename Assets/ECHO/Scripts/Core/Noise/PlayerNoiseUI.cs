@@ -39,6 +39,17 @@ namespace Echo.Core
 
         // ── Lifecycle ─────────────────────────────────────────────────────────
 
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void AutoInitialize()
+        {
+            if (FindFirstObjectByType<PlayerNoiseUI>() == null)
+            {
+                var go = new GameObject("[PlayerNoiseUI]");
+                go.AddComponent<PlayerNoiseUI>();
+                DontDestroyOnLoad(go);
+            }
+        }
+
         private void OnEnable()  => EchoEvents.Noise += OnNoise;
         private void OnDisable() => EchoEvents.Noise -= OnNoise;
 
