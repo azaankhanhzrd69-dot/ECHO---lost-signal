@@ -9,32 +9,73 @@ namespace Echo.Shared
     [CreateAssetMenu(fileName = "GameTuning", menuName = "ECHO/Game Tuning")]
     public class GameTuning : ScriptableObject
     {
-        [Header("Noise - Loudness (0..1 scale, where 1.0 represents full hearing radius)")]
-        [Min(0f)] public float crouchLoudness = NoiseLevel.Crouch;
-        [Min(0f)] public float walkLoudness = NoiseLevel.Walk;
-        [Min(0f)] public float runLoudness = NoiseLevel.Run;
+        // ── Noise — Loudness ─────────────────────────────────────────────────────
+        // Scale: 0..1. At loudness 1.0 with gain 1.0 the monster hears it from
+        // the full hearingRadius away. At 0.0 it is inaudible from any distance.
+        //
+        //   Crouch  0.10 — nearly silent; monster must be within ~10 % of its
+        //                  hearing radius (~1.8 m at 18 m radius) to react.
+        //   Walk    0.40 — half-alert range; gives the monster a chance to
+        //                  investigate but won't instantly trigger Chase.
+        //   Run     1.00 — maximum; heard across the entire hearing radius and
+        //                  fills the alert meter fast enough to trigger Chase.
+        [Header("Noise - Loudness (0..1 scale)")]
+        [Tooltip("Crouch-walk loudness. Low enough that only nearby passes trigger Investigate.")]
+        [Min(0f)] public float crouchLoudness = 0.10f;
+
+        [Tooltip("Normal-walk loudness. Triggers Investigate at medium range; Chase if monster is close.")]
+        [Min(0f)] public float walkLoudness   = 0.40f;
+
+        [Tooltip("Run/sprint loudness. Heard from full hearingRadius; triggers Chase quickly.")]
+        [Min(0f)] public float runLoudness    = 1.00f;
 
         [Header("Noise - Footstep Spacing (metres)")]
-        [Tooltip("Horizontal distance in metres between footstep noises while crouching.")]
-        [Min(0.1f)] public float crouchStepDistance = 1.2f;
+        [Tooltip("Horizontal distance in metres between footstep noise pulses while crouching.")]
+        [Min(0.1f)] public float crouchStepDistance = 1.5f;
 
-        [Tooltip("Horizontal distance in metres between footstep noises while walking.")]
-        [Min(0.1f)] public float walkStepDistance = 1.8f;
+        [Tooltip("Horizontal distance in metres between footstep noise pulses while walking.")]
+        [Min(0.1f)] public float walkStepDistance   = 2.0f;
 
-        [Tooltip("Horizontal distance in metres between footstep noises while running.")]
-        [Min(0.1f)] public float runStepDistance = 2.2f;
+        [Tooltip("Horizontal distance in metres between footstep noise pulses while running.")]
+        [Min(0.1f)] public float runStepDistance    = 2.5f;
 
-        [Header("Noise - Footstep Intervals (seconds)")]
+        [Header("Noise - Continuous Run Pulse")]
+        [Tooltip("While sprinting, emit an additional noise every N seconds regardless of distance travelled. " +
+                 "This keeps the monster's target position fresh on long straight corridors. " +
+                 "Set to 0 to disable. Suggested: 0.35 s (roughly matches sprint footstep cadence).")]
+        [Min(0.05f)] public float runContinuousInterval = 0.35f;
+
+        [Header("Noise - Footstep Intervals (seconds, legacy audio only — not used by echolocation)")]
         [Min(0f)] public float footstepIntervalCrouch = 0.9f;
-        [Min(0f)] public float footstepIntervalWalk = 0.55f;
-        [Min(0f)] public float footstepIntervalRun = 0.35f;
+        [Min(0f)] public float footstepIntervalWalk   = 0.55f;
+        [Min(0f)] public float footstepIntervalRun    = 0.35f;
 
         [Header("Hearing & Alert")]
+        [Tooltip("How far (metres) the monster can hear any noise. " +
+                 "Outside this sphere, all noises are inaudible regardless of loudness.")]
         [Min(0f)] public float hearingRadius = 18f;
-        [Min(0f)] public float alertGainScale = 1f;
+
+        [Tooltip("Scales how much each noise raises the alert meter. " +
+                 "1.0 = raw effective value (loudness × falloff). " +
+                 "Lower this to make the monster less sensitive overall.")]
+        [Min(0f)] public float alertGainScale = 1.0f;
+
+        [Tooltip("Alert decays by this many units per second when no noise is heard. " +
+                 "Higher = monster forgets faster. 0.15 means full alert (1.0) clears in ~7 s.")]
         [Min(0f)] public float alertDecayPerSecond = 0.15f;
-        [Min(0f)] public float investigateThreshold = 0.25f;
-        [Min(0f)] public float chaseThreshold = 0.7f;
+
+        [Tooltip("Alert level (0..∞) that triggers Investigate. " +
+                 "One crouch step from 2 m away adds ≈ 0.09; one walk step from 5 m ≈ 0.31. " +
+                 "Keep this above a single crouch step so the monster doesn't react to every whisper.")]
+        [Min(0f)] public float investigateThreshold = 0.40f;
+
+        [Tooltip("Alert level that triggers Chase. " +
+                 "One run step anywhere in hearingRadius adds loudness × falloff × gain. " +
+                 "At radius/2 distance that's 0.5 per step; a few steps reaches this. " +
+                 "Suggested: 1.2 so two nearby run steps trigger Chase, not one.")]
+        [Min(0f)] public float chaseThreshold = 1.20f;
+
+        [Tooltip("Max seconds the monster searches near the last heard position before giving up.")]
         [Min(0f)] public float searchTimeout = 12f;
 
         [Header("Monster Movement & Combat")]

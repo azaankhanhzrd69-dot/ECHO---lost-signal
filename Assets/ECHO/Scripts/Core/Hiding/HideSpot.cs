@@ -40,7 +40,7 @@ namespace Echo.Core
         /// Called by Interact's Interactor when the player presses the interact key.
         /// Delegates to HideController.Instance so Core owns the hide logic.
         /// </summary>
-        public void Interact(GameObject interactor)
+        public void Interact()
         {
             HideController ctrl = HideController.Instance;
             if (ctrl == null)

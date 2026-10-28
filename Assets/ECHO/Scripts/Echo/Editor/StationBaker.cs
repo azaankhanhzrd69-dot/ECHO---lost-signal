@@ -355,6 +355,7 @@ namespace Echo.Editor
                 return cached;
 
             string safeName = SanitizeName(string.IsNullOrEmpty(sourceMesh.name) ? fallbackName : sourceMesh.name);
+            sourceMesh.name = safeName;
             string assetPath = $"{MeshDir}/{safeName}.asset";
 
             Mesh existing = AssetDatabase.LoadAssetAtPath<Mesh>(assetPath);
@@ -393,6 +394,7 @@ namespace Echo.Editor
             }
 
             string safeName = SanitizeName(string.IsNullOrEmpty(sourceMat.name) ? "StationMaterial" : sourceMat.name);
+            sourceMat.name = safeName;
             string assetPath = $"{MaterialDir}/{safeName}.mat";
 
             Material existing = AssetDatabase.LoadAssetAtPath<Material>(assetPath);

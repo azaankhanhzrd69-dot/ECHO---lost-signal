@@ -4,8 +4,17 @@ using UnityEngine;
 namespace Echo.Core
 {
     /// <summary>
-    /// Emits noise events at distance-based footstep intervals when the player moves.
-    /// Priority order: Crouch (quietest), Run (loudest), Walk. Airborne and stationary = no noise.
+    /// Emits EchoEvents.Noise when the player moves on the ground.
+    ///
+    /// Locomotion tiers and their behaviour:
+    ///   Crouch-walk  – one quiet noise every crouchStepDistance metres.
+    ///                  Very low loudness; monster only hears it if very close.
+    ///   Walk         – one medium noise every walkStepDistance metres.
+    ///   Run          – one loud noise every runStepDistance metres AND one loud
+    ///                  timed pulse every runContinuousInterval seconds while
+    ///                  sprinting. The timed pulse keeps _lastHeardPosition fresh
+    ///                  so the monster keeps chasing even on long straight runs.
+    ///
     /// Attaches to the player GameObject alongside CharacterController.
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
@@ -13,112 +22,134 @@ namespace Echo.Core
     {
         [Header("Configuration")]
         [SerializeField]
-        [Tooltip("Shared gameplay tuning asset for loudness and step spacing. If null, fallback values are used.")]
+        [Tooltip("Shared gameplay tuning asset. If null, fallback values below are used.")]
         private GameTuning gameTuning;
 
         [Header("Fallback Step Spacing (metres)")]
-        [SerializeField] private float fallbackCrouchStepDistance = 1.2f;
-        [SerializeField] private float fallbackWalkStepDistance = 1.8f;
-        [SerializeField] private float fallbackRunStepDistance = 2.2f;
+        [SerializeField] private float fallbackCrouchStepDistance = 1.5f;
+        [SerializeField] private float fallbackWalkStepDistance   = 2.0f;
+        [SerializeField] private float fallbackRunStepDistance    = 2.5f;
 
         [Header("Fallback Loudness (0..1 scale)")]
-        [SerializeField] private float fallbackCrouchLoudness = 0.25f;
-        [SerializeField] private float fallbackWalkLoudness = 0.5f;
-        [SerializeField] private float fallbackRunLoudness = 1.0f;
+        [SerializeField] private float fallbackCrouchLoudness = 0.10f;
+        [SerializeField] private float fallbackWalkLoudness   = 0.40f;
+        [SerializeField] private float fallbackRunLoudness    = 1.00f;
 
-        [Header("Thresholds")]
+        [Header("Fallback Continuous Run Noise")]
         [SerializeField]
-        [Tooltip("CharacterController height below which player is considered crouching (normal height is 1.75m).")]
+        [Tooltip("While running, emit an additional noise every N seconds so the monster's " +
+                 "target position stays fresh across long straight corridors.")]
+        private float fallbackRunContinuousInterval = 0.35f;
+
+        [Header("Detection Thresholds")]
+        [SerializeField]
+        [Tooltip("CharacterController height below which the player is considered crouching.")]
         private float crouchHeightThreshold = 1.4f;
 
         [SerializeField]
-        [Tooltip("Horizontal speed in metres/second above which player is considered running (walk is ~4.25m/s, run is ~6.3m/s).")]
+        [Tooltip("Horizontal speed (m/s) at or above which the player is running. " +
+                 "Walk ≈ 4.25 m/s, Run ≈ 6.3 m/s.")]
         private float runSpeedThreshold = 5.0f;
 
-        private CharacterController controller;
-        private Vector3 lastPosition;
-        private float accumulatedDistance;
+        // ── Runtime ───────────────────────────────────────────────────────────
+        private CharacterController _controller;
+        private Vector3 _lastPosition;
+        private float   _accumulatedDistance;
+        private float   _continuousRunTimer;   // counts up; fires when >= interval
 
-        // ── Unity Callbacks ────────────────────────────────────────────────────
+        // ── Unity lifecycle ───────────────────────────────────────────────────
 
-        /// <summary>
-        /// Awake: Cache CharacterController reference and record initial position.
-        /// </summary>
         private void Awake()
         {
-            controller = GetComponent<CharacterController>();
-            lastPosition = transform.position;
+            _controller  = GetComponent<CharacterController>();
+            _lastPosition = transform.position;
         }
 
-        /// <summary>
-        /// OnEnable: Reset distance accumulator when activated.
-        /// </summary>
         private void OnEnable()
         {
-            lastPosition = transform.position;
-            accumulatedDistance = 0f;
+            _lastPosition        = transform.position;
+            _accumulatedDistance = 0f;
+            _continuousRunTimer  = 0f;
         }
 
-        /// <summary>
-        /// Update: Accumulate horizontal movement while grounded, and emit noise every N metres.
-        /// </summary>
         private void Update()
         {
-            if (controller == null)
-                return;
+            if (_controller == null) return;
 
-            Vector3 currentPosition = transform.position;
+            Vector3 current = transform.position;
 
-            // Airborne = no footstep noise accumulated
-            if (!controller.isGrounded)
+            if (!_controller.isGrounded)
             {
-                lastPosition = currentPosition;
+                _lastPosition = current;
+                _continuousRunTimer = 0f;
                 return;
             }
 
-            // Calculate horizontal ground displacement since last frame
-            Vector3 horizontalDelta = new Vector3(currentPosition.x - lastPosition.x, 0f, currentPosition.z - lastPosition.z);
-            float horizontalDistance = horizontalDelta.magnitude;
-            lastPosition = currentPosition;
+            // Horizontal distance this frame
+            var delta = new Vector3(current.x - _lastPosition.x, 0f, current.z - _lastPosition.z);
+            float moved = delta.magnitude;
+            _lastPosition = current;
 
-            // Stationary = no noise
-            if (horizontalDistance < 0.0001f)
+            if (moved < 0.0001f)
+            {
+                _continuousRunTimer = 0f; // reset run timer when stationary
                 return;
+            }
 
-            accumulatedDistance += horizontalDistance;
+            _accumulatedDistance += moved;
 
-            // Evaluate locomotion mode (Priority: Crouch -> Run -> Walk)
-            float dt = Mathf.Max(Time.deltaTime, 0.0001f);
-            float horizontalSpeed = horizontalDistance / dt;
+            // ── Locomotion mode ───────────────────────────────────────────────
+            float dt    = Mathf.Max(Time.deltaTime, 0.0001f);
+            float speed = moved / dt;
 
-            bool isCrouching = controller.height < crouchHeightThreshold;
-            bool isRunning = !isCrouching && horizontalSpeed >= runSpeedThreshold;
+            bool isCrouching = _controller.height < crouchHeightThreshold;
+            bool isRunning   = !isCrouching && speed >= runSpeedThreshold;
 
             float stepDistance;
             float loudness;
+            float runInterval;
 
             if (isCrouching)
             {
                 stepDistance = gameTuning != null ? gameTuning.crouchStepDistance : fallbackCrouchStepDistance;
-                loudness = gameTuning != null ? gameTuning.crouchLoudness : fallbackCrouchLoudness;
+                loudness     = gameTuning != null ? gameTuning.crouchLoudness     : fallbackCrouchLoudness;
+                runInterval  = float.MaxValue; // no continuous noise while crouching
             }
             else if (isRunning)
             {
-                stepDistance = gameTuning != null ? gameTuning.runStepDistance : fallbackRunStepDistance;
-                loudness = gameTuning != null ? gameTuning.runLoudness : fallbackRunLoudness;
+                stepDistance = gameTuning != null ? gameTuning.runStepDistance          : fallbackRunStepDistance;
+                loudness     = gameTuning != null ? gameTuning.runLoudness              : fallbackRunLoudness;
+                runInterval  = gameTuning != null ? gameTuning.runContinuousInterval    : fallbackRunContinuousInterval;
             }
             else
             {
                 stepDistance = gameTuning != null ? gameTuning.walkStepDistance : fallbackWalkStepDistance;
-                loudness = gameTuning != null ? gameTuning.walkLoudness : fallbackWalkLoudness;
+                loudness     = gameTuning != null ? gameTuning.walkLoudness     : fallbackWalkLoudness;
+                runInterval  = float.MaxValue; // no continuous noise while walking
             }
 
-            // When accumulated distance exceeds step threshold, emit one noise event at player's feet
-            if (accumulatedDistance >= stepDistance)
+            // ── Distance-based footstep pulse ─────────────────────────────────
+            if (_accumulatedDistance >= stepDistance)
             {
-                accumulatedDistance = 0f;
-                Vector3 feetPosition = transform.position;
-                EchoEvents.MakeNoise(feetPosition, loudness);
+                _accumulatedDistance = 0f;
+                EchoEvents.MakeNoise(transform.position, loudness);
+            }
+
+            // ── Time-based continuous run pulse ───────────────────────────────
+            // Fires BETWEEN distance pulses so the monster always has a fresh
+            // position even on long straight runs without a step crossing.
+            if (isRunning)
+            {
+                _continuousRunTimer += Time.deltaTime;
+                if (_continuousRunTimer >= runInterval)
+                {
+                    _continuousRunTimer = 0f;
+                    EchoEvents.MakeNoise(transform.position, loudness);
+                }
+            }
+            else
+            {
+                _continuousRunTimer = 0f;
             }
         }
     }

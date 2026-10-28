@@ -219,8 +219,11 @@ namespace Echo.Core
 
         private void TickStateMachine()
         {
-            // Kill check: runs in every active state except Attack itself.
-            if (State != MonsterState.Attack && playerTransform != null)
+            // Kill check: ONLY fires while actively chasing. The monster hunts by sound —
+            // it cannot "sense" you while dormant, investigating a noise, or wandering in
+            // search. Removing the kill check from those states eliminates the perceived
+            // wall-hack / line-of-sight behaviour where proximity alone caused death.
+            if (State == MonsterState.Chase && playerTransform != null)
             {
                 float dist = Vector3.Distance(transform.position, playerTransform.position);
                 if (dist <= tuning.killRange)
@@ -423,7 +426,7 @@ namespace Echo.Core
         {
             if (State == next) return;
             State = next;
-            EchoEvents.SetMonsterState(next);
+            EchoEvents.SetMonsterState((Echo.Shared.MonsterState)next);
         }
     }
 }

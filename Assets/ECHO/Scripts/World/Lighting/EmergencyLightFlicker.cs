@@ -1,4 +1,5 @@
 using UnityEngine;
+using Echo.Shared;
 
 namespace Echo.World
 {
@@ -111,3 +112,4 @@ namespace Echo.World
             [Range(0f, 1f)] public float tensionFloor;
         }
     }
+}

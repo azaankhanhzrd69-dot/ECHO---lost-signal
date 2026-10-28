@@ -1,4 +1,5 @@
 using UnityEngine;
+using Echo.Shared;
 
 namespace Echo.World
 {

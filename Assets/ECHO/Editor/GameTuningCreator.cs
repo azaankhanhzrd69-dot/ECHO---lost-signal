@@ -33,23 +33,24 @@ namespace Echo.Editor
             }
 
             // ── Player Noise & Footsteps ──────────────────────────────────────────
-            tuning.crouchLoudness = 0.1f;
-            tuning.walkLoudness = 0.35f;
-            tuning.runLoudness = 0.85f;
-            tuning.crouchStepDistance = 1.2f;
-            tuning.walkStepDistance = 1.8f;
-            tuning.runStepDistance = 2.2f;
-            tuning.footstepIntervalCrouch = 0.9f;
-            tuning.footstepIntervalWalk = 0.55f;
-            tuning.footstepIntervalRun = 0.35f;
+            tuning.crouchLoudness           = 0.10f;   // nearly silent
+            tuning.walkLoudness             = 0.40f;   // medium range
+            tuning.runLoudness              = 1.00f;   // full radius
+            tuning.crouchStepDistance       = 1.5f;
+            tuning.walkStepDistance         = 2.0f;
+            tuning.runStepDistance          = 2.5f;
+            tuning.runContinuousInterval    = 0.35f;   // extra pulse every 0.35 s while sprinting
+            tuning.footstepIntervalCrouch   = 0.9f;
+            tuning.footstepIntervalWalk     = 0.55f;
+            tuning.footstepIntervalRun      = 0.35f;
 
             // ── Monster Hearing & Alert (C-05) ────────────────────────────────────
-            tuning.hearingRadius = 18.0f;
-            tuning.alertGainScale = 1.0f;
-            tuning.alertDecayPerSecond = 0.15f;
-            tuning.investigateThreshold = 0.25f;
-            tuning.chaseThreshold = 0.7f;
-            tuning.searchTimeout = 12.0f;
+            tuning.hearingRadius         = 18.0f;
+            tuning.alertGainScale        = 1.0f;
+            tuning.alertDecayPerSecond   = 0.15f;
+            tuning.investigateThreshold  = 0.40f;   // raised: one crouch step won't trigger
+            tuning.chaseThreshold        = 1.20f;   // raised: needs sustained noise to Chase
+            tuning.searchTimeout         = 12.0f;
 
             // ── Monster Movement, Search & Memory (C-05) ──────────────────────────
             tuning.speedInvestigate = 2.2f;
