@@ -67,6 +67,6 @@
         "*.sln": "*.csproj",
         "*.slnx": "*.csproj"
     },
-    "dotnet.defaultSolution": "ECHO.slnx",
+    "dotnet.defaultSolution": "ECHO---lost-signal.slnx",
     "dotnet.enableWorkspaceBasedDevelopment": false
 }

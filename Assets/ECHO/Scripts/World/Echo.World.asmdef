@@ -1,0 +1,17 @@
+{
+    "name": "Echo.World",
+    "rootNamespace": "Echo.World",
+    "references": [
+        "Echo.Shared"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
+
