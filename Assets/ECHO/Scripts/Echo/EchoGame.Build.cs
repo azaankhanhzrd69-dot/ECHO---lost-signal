@@ -7,6 +7,10 @@ public sealed partial class EchoGame : MonoBehaviour
     [Tooltip("When true, loads pre-baked station geometry and lighting from the scene instead of procedurally building it at runtime. Set in Inspector on the EchoGame host GameObject.")]
     [SerializeField] private bool useBakedStation = false;
 
+    // W-13: "New layout" flag. When true, builds the data-driven single-floor maze layout (StationLayout).
+    [Tooltip("When true, builds the single-floor deck maze layout from StationLayout. Set false to restore the legacy 112m station deck.")]
+    [SerializeField] private bool useNewLayout = true;
+
     private void BuildGame()
     {
         if (testArenaMode)
@@ -45,13 +49,21 @@ public sealed partial class EchoGame : MonoBehaviour
 
             CreateMaterials();
             LoadStationKit();
-            worldRoot = new GameObject("Station - Deck 03").transform;
-            worldRoot.position = StationEditorOffset;
-            BuildStation();
-            BuildModularAnnex();
-            BuildSpaceBackdrop();
-            BuildBlackHole();
-            BuildEscapeShip();
+
+            if (useNewLayout)
+            {
+                BuildNewDeck();
+            }
+            else
+            {
+                worldRoot = new GameObject("Station - Deck 03").transform;
+                worldRoot.position = StationEditorOffset;
+                BuildStation();
+                BuildModularAnnex();
+                BuildSpaceBackdrop();
+                BuildBlackHole();
+                BuildEscapeShip();
+            }
         }
         else
         {
@@ -72,7 +84,9 @@ public sealed partial class EchoGame : MonoBehaviour
         }
         else if (!useBakedStation)
         {
-            AddInteractable("CORE", 0, "Take power core", new Vector3(8f, 0.25f, 12f), true);
+            if (!useNewLayout)
+            {
+                AddInteractable("CORE", 0, "Take power core", new Vector3(8f, 0.25f, 12f), true);
             AddInteractable("CORE", 1, "Take power core", new Vector3(8f, 0.25f, -12f), true);
             AddInteractable("CORE", 2, "Take power core", new Vector3(18f, 0.25f, 6.5f), true);
             AddInteractable("PUZZLE", 0, "Access breaker panel", new Vector3(19f, 0.1f, -1.5f), false);
@@ -101,24 +115,25 @@ public sealed partial class EchoGame : MonoBehaviour
             CreateSign("HYDROPONICS  /  06", new Vector3(51f, 2.8f, 19.5f), 180f);
             CreateSign("MAINTENANCE  /  07", new Vector3(51f, 2.8f, -19.5f), 0f);
             CreateSign("CARGO BAY  /  08", new Vector3(70f, 2.8f, 19.5f), 180f);
+            }
         }
     }
 
     private void CollectBakedStationReferences()
     {
         // 1. World root
-        GameObject rootGo = GameObject.Find("Station - Deck 03");
+        GameObject rootGo = GameObject.Find("STATION") ?? GameObject.Find("Station - Deck 03");
         if (rootGo != null)
         {
             worldRoot = rootGo.transform;
         }
         else
         {
-            Debug.LogWarning("[EchoGame] Baked station root 'Station - Deck 03' not found in scene.");
+            Debug.LogWarning("[EchoGame] Baked station root not found in scene.");
         }
 
         // 2. Blast doors (doors count)
-        annexBulkhead = GameObject.Find("Power-controlled annex blast door");
+        annexBulkhead = GameObject.Find("Door_Entry") ?? GameObject.Find("Power-controlled annex blast door");
         GameObject extraAirlockDoor = GameObject.Find("Power-controlled airlock blast door");
         if (extraAirlockDoor != null)
             extraAirlockDoor.SetActive(false);
@@ -1159,7 +1174,15 @@ public sealed partial class EchoGame : MonoBehaviour
     {
         player = new GameObject("You - Echo operator");
         player.transform.SetParent(worldRoot, false);
-        player.transform.localPosition = testArenaMode ? testPlayerSpawn : SpawnPoint;
+        if (testArenaMode)
+            player.transform.localPosition = testPlayerSpawn;
+        else if (useNewLayout)
+        {
+            player.transform.localPosition = new Vector3(2f, 0f, -26f);
+            player.transform.localRotation = Quaternion.Euler(0f, 0f, 0f);
+        }
+        else
+            player.transform.localPosition = SpawnPoint;
         characterController = player.AddComponent<CharacterController>();
         characterController.height = 1.75f;
         characterController.radius = 0.34f;
@@ -1211,7 +1234,7 @@ public sealed partial class EchoGame : MonoBehaviour
         creatureObject.transform.SetParent(worldRoot, false);
         creatureObject.transform.localPosition = testArenaMode
             ? testMonsterSpawn
-            : new Vector3(21f, 0f, 0f);
+            : (useNewLayout ? new Vector3(9f, 0f, 10f) : new Vector3(21f, 0f, 0f));
         creature = creatureObject.AddComponent<EchoCreature>();
         creature.Initialize(this, monsterPrefab, materialTemplate, monsterFootstepLoopClip, monsterProximityRoarClip, monsterDeathRoarClip, footstepClips, voiceAlerts[2]);
         if (testArenaMode)
@@ -1427,4 +1450,295 @@ public sealed partial class EchoGame : MonoBehaviour
         voiceSource.spatialBlend = 0f;
         voiceSource.playOnAwake = false;
     }
+
+    // W-13: Creates a reactor socket indicator and receptacle at custom position
+    private GameObject CreateReactorSocketAt(int index, Vector3 pos)
+    {
+        GameObject socket = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        socket.name = "Reactor cell receptacle " + (index + 1);
+        socket.transform.SetParent(worldRoot, false);
+        socket.transform.localPosition = pos - new Vector3(0f, 0.11f, 0f);
+        socket.transform.localScale = new Vector3(0.68f, 0.09f, 0.68f);
+        socket.GetComponent<Renderer>().sharedMaterial = wallMaterial;
+
+        GameObject indicator = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+        indicator.name = "Reactor receptacle status " + (index + 1);
+        indicator.transform.SetParent(worldRoot, false);
+        indicator.transform.localPosition = pos - new Vector3(0f, 0.01f, 0f);
+        indicator.transform.localScale = new Vector3(0.48f, 0.025f, 0.48f);
+        indicator.GetComponent<Renderer>().sharedMaterial = deadCoreMaterial;
+
+        return indicator;
+    }
+
+    // W-13: Builds the single-floor deck maze layout from StationLayout.
+    public void BuildNewDeck()
+    {
+        var layout = Echo.World.StationLayout.Default;
+
+        // 1. Root and hierarchy
+        GameObject stationRoot = new GameObject("STATION");
+        worldRoot = stationRoot.transform;
+        worldRoot.position = StationEditorOffset;
+
+        Transform geomGroup = new GameObject("Geometry").transform;
+        geomGroup.SetParent(worldRoot, false);
+
+        Transform propsGroup = new GameObject("Props").transform;
+        propsGroup.SetParent(worldRoot, false);
+
+        Transform lightsGroup = new GameObject("Lights").transform;
+        lightsGroup.SetParent(worldRoot, false);
+
+        Transform anchorsGroup = new GameObject("Anchors").transform;
+        anchorsGroup.SetParent(worldRoot, false);
+
+        // Sub-groups for geometry
+        Transform floorsGroup = new GameObject("Floors").transform;
+        floorsGroup.SetParent(geomGroup, false);
+
+        Transform wallsGroup = new GameObject("Walls").transform;
+        wallsGroup.SetParent(geomGroup, false);
+
+        Transform ceilingsGroup = new GameObject("Ceilings").transform;
+        ceilingsGroup.SetParent(geomGroup, false);
+
+        Transform obstaclesGroup = new GameObject("Obstacles").transform;
+        obstaclesGroup.SetParent(geomGroup, false);
+
+        Transform partitionsGroup = new GameObject("Partitions").transform;
+        partitionsGroup.SetParent(geomGroup, false);
+
+        Transform doorsGroup = new GameObject("Doors").transform;
+        doorsGroup.SetParent(geomGroup, false);
+
+        // 2. Floors
+        BuildFloorGrid(layout.MainDeckXMin, layout.MainDeckXMax, layout.MainDeckZMin, layout.MainDeckZMax, "MainDeck_Floor");
+        BuildFloorGrid(layout.DockingBayXMin, layout.DockingBayXMax, layout.DockingBayZMin, layout.DockingBayZMax, "DockingBay_Floor");
+
+        // 3. Ceilings
+        BuildRoofGrid(layout.MainDeckXMin, layout.MainDeckXMax, layout.MainDeckZMin, layout.MainDeckZMax, "MainDeck_Ceiling");
+        MakeBlock("Reactor_High_Ceiling", new Vector3(19f, 5.0f, 6f), new Vector3(10f, 0.3f, 8f), wallMaterial, true);
+
+        // 4. Perimeter Walls (Hull)
+        AddWall(0f, 24f, 48f, true);
+        AddWall(24f, 0f, 48f, false);
+        AddWall(-24f, 0f, 48f, false);
+        AddWall(-14f, -24f, 20f, true);
+        AddWall(16f, -24f, 16f, true);
+        AddWall(-1.6f, -24f, 4.8f, true);
+        AddWall(5.6f, -24f, 4.8f, true);
+
+        // Docking bay perimeter
+        AddWall(-4f, -30f, 12f, false);
+        AddWall(8f, -30f, 12f, false);
+        AddWall(2f, -36f, 12f, true);
+
+        // 5. Room Interior Boundary Walls
+        // Sleeping Quarters: X -8..10, Z 14..24
+        AddWall(-8f, 19f, 10f, false);
+        AddWall(10f, 19f, 10f, false);
+        AddWall(-7f, 14f, 2f, true);
+        AddWall(-2f, 14f, 3.6f, true);
+        AddWall(5.5f, 14f, 7f, true);
+
+        // Washroom: X 14..24, Z 14..24
+        AddWall(19f, 14f, 10f, true);
+        AddWall(14f, 16.5f, 5f, false);
+        AddWall(14f, 21.5f, 5f, false);
+
+        // Escape Pod: X -24..-12, Z 10..18
+        AddWall(-18f, 18f, 12f, true);
+        AddWall(-18f, 10f, 12f, true);
+        AddWall(-12f, 11.5f, 3.5f, false);
+        AddWall(-12f, 16.5f, 3.5f, false);
+
+        // Reactor: X 14..24, Z 2..10
+        AddWall(19f, 10f, 10f, true);
+        AddWall(14f, 4f, 4f, false);
+        AddWall(14f, 8f, 4f, false);
+        AddWall(16f, 2f, 4f, true);
+        AddWall(22f, 2f, 4f, true);
+
+        // Cockpit: X -24..-12, Z -10..4
+        AddWall(-18f, -10f, 12f, true);
+        AddWall(-14f, 4f, 4f, true);
+        AddWall(-22f, 4f, 4f, true);
+        AddWall(-12f, -6.5f, 7f, false);
+        AddWall(-12f, 1f, 6f, false);
+
+        // MedBay: X 12..24, Z -18..-8
+        AddWall(18f, -8f, 12f, true);
+        AddWall(18f, -18f, 12f, true);
+        AddWall(12f, -16f, 4f, false);
+        AddWall(12f, -10f, 4f, false);
+
+        // Radio: X -24..-14, Z -24..-18
+        AddWall(-19f, -18f, 10f, true);
+        AddWall(-14f, -19f, 2f, false);
+        AddWall(-14f, -23f, 2f, false);
+
+        // 6. Hallway Obstacles (Blocks)
+        foreach (var b in layout.Blocks)
+        {
+            var blk = MakeBlock(b.Name, b.Center, b.Size, wallMaterial, true);
+            blk.transform.SetParent(obstaclesGroup, false);
+        }
+
+        // 7. Thin Partitions
+        foreach (var p in layout.Partitions)
+        {
+            var part = MakeBlock(p.Name, p.Center, p.Size, wallMaterial, true);
+            part.transform.SetParent(partitionsGroup, false);
+        }
+
+        // 8. Doors (Frames and Leaves)
+        foreach (var d in layout.Doors)
+        {
+            float yaw = (d.Wall == "North" || d.Wall == "South") ? 0f : 90f;
+            GameObject frame = PlaceKitModule(doorFramePrefab, d.Center, yaw, d.Name + "_Frame", true, false);
+            frame.transform.SetParent(doorsGroup, false);
+
+            if (d.HasLeaf)
+            {
+                GameObject leaf = PlaceKitModule(doorPanelPrefab, d.Center, yaw, !string.IsNullOrEmpty(d.LeafName) ? d.LeafName : d.Name + "_Leaf", true, true);
+                leaf.transform.SetParent(frame.transform, true);
+                if (d.Name == "Door_Entry")
+                {
+                    annexBulkhead = leaf;
+                    if (leaf.GetComponent<EchoBlastDoor>() == null)
+                        leaf.AddComponent<EchoBlastDoor>();
+                }
+            }
+        }
+
+        // 9. Chase Seals
+        foreach (var s in layout.ChaseSeals)
+        {
+            GameObject sealGO = new GameObject(s.Name);
+            sealGO.transform.SetParent(doorsGroup, false);
+            sealGO.transform.localPosition = s.Position;
+            var obstacle = sealGO.AddComponent<UnityEngine.AI.NavMeshObstacle>();
+            obstacle.carving = true;
+            obstacle.size = (s.AcrossAxis == 'X') ? new Vector3(0.5f, 3.5f, s.Width) : new Vector3(s.Width, 3.5f, 0.5f);
+            obstacle.enabled = false;
+        }
+
+        // 10. Viewport and Space Backdrop
+        BuildSpaceWindow(-24f, -3f, 1f, "Cockpit Viewport");
+        BuildSpaceBackdrop();
+        BuildBlackHole();
+
+        // 11. Props & Room Dressing
+        escapeShip = PlaceKitModule(escapeShipPrefab, new Vector3(2f, 0f, -30.5f), 0f, "StarSparrow - docked craft", false, true);
+        escapeShip.transform.SetParent(propsGroup, false);
+        escapeShipStartPosition = escapeShip.transform.localPosition;
+        escapeShipStartRotation = escapeShip.transform.localRotation;
+        escapeShipStartScale = escapeShip.transform.localScale;
+
+        MakeBlock("PLACEHOLDER_VentGrille", new Vector3(-3.7f, 0.5f, -30f), new Vector3(0.1f, 0.8f, 0.8f), trimMaterial, true).transform.SetParent(propsGroup, false);
+        MakeBlock("PLACEHOLDER_Keypad", new Vector3(3.6f, 1.3f, -24.2f), new Vector3(0.25f, 0.35f, 0.1f), trimMaterial, true).transform.SetParent(propsGroup, false);
+        MakeBlock("PLACEHOLDER_VentPaper", new Vector3(-3.7f, 0.2f, -30f), new Vector3(0.3f, 0.02f, 0.3f), wallMaterial, false).transform.SetParent(propsGroup, false);
+
+        for (int b = 0; b < 4; b++)
+        {
+            MakeBlock($"PLACEHOLDER_Bunk_{b + 1}", new Vector3(-6f + b * 4f, 0.5f, 22.5f), new Vector3(2f, 1f, 2f), wallMaterial, true).transform.SetParent(propsGroup, false);
+        }
+        MakeBlock("PLACEHOLDER_Locker_Sleeping", new Vector3(8.5f, 1.1f, 16f), new Vector3(0.8f, 2.2f, 0.8f), trimMaterial, true).transform.SetParent(propsGroup, false);
+
+        MakeBlock("PLACEHOLDER_Sink_1", new Vector3(16f, 0.8f, 22.5f), new Vector3(1.2f, 0.9f, 0.6f), trimMaterial, true).transform.SetParent(propsGroup, false);
+        MakeBlock("PLACEHOLDER_Sink_2", new Vector3(18f, 0.8f, 22.5f), new Vector3(1.2f, 0.9f, 0.6f), trimMaterial, true).transform.SetParent(propsGroup, false);
+        MakeBlock("PLACEHOLDER_Toilet_1", new Vector3(22.5f, 0.6f, 16f), new Vector3(0.8f, 0.8f, 0.8f), wallMaterial, true).transform.SetParent(propsGroup, false);
+
+        MakeBlock("PLACEHOLDER_EscapePod", new Vector3(-18f, 1.5f, 14f), new Vector3(4f, 2.8f, 4f), trimMaterial, true).transform.SetParent(propsGroup, false);
+        MakeBlock("Pod_Hatch", new Vector3(-23.9f, 1.5f, 14f), new Vector3(0.2f, 2f, 1.5f), trimMaterial, true).transform.SetParent(propsGroup, false);
+
+        for (int i = 0; i < 3; i++)
+        {
+            Vector3 socketPos = new Vector3(22.5f, 0.9f, 5f + i);
+            reactorSocketIndicators[i] = CreateReactorSocketAt(i, socketPos);
+
+            GameObject cell = Instantiate(powerCellPrefabs[i % powerCellPrefabs.Length], worldRoot, false);
+            cell.name = "Reactor cell socket " + (i + 1);
+            cell.transform.localPosition = socketPos + new Vector3(0f, 0.23f, 0f);
+            cell.transform.localRotation = Quaternion.Euler(0f, i * 35f, 0f);
+            cell.SetActive(false);
+            reactorCellIndicators[i] = cell;
+        }
+        MakeBlock("PLACEHOLDER_ReactorPedestal", new Vector3(22.5f, 1.2f, 4f), new Vector3(0.8f, 1.2f, 0.8f), wallMaterial, true).transform.SetParent(propsGroup, false);
+
+        PlaceKitModule(consolePrefab, new Vector3(-20f, 0f, -8f), 0f, "Cockpit Console 1", true, true).transform.SetParent(propsGroup, false);
+        PlaceKitModule(consolePrefab, new Vector3(-16f, 0f, -8f), 0f, "Cockpit Console 2", true, true).transform.SetParent(propsGroup, false);
+        MakeBlock("PLACEHOLDER_CockpitDesk", new Vector3(-20f, 0.45f, -2f), new Vector3(2f, 0.9f, 1f), trimMaterial, true).transform.SetParent(propsGroup, false);
+
+        MakeBlock("PLACEHOLDER_MedBed_1", new Vector3(16f, 0.5f, -11f), new Vector3(1.2f, 0.8f, 2.2f), trimMaterial, true).transform.SetParent(propsGroup, false);
+        MakeBlock("PLACEHOLDER_MedBed_2", new Vector3(16f, 0.5f, -15f), new Vector3(1.2f, 0.8f, 2.2f), trimMaterial, true).transform.SetParent(propsGroup, false);
+        MakeBlock("PLACEHOLDER_Body", new Vector3(20.5f, 0.15f, -13f), new Vector3(0.8f, 0.3f, 1.8f), creatureMaterial, false).transform.SetParent(propsGroup, false);
+
+        PlaceKitModule(consolePrefab, new Vector3(-21f, 0f, -22.4f), 0f, "Radio Console", true, true).transform.SetParent(propsGroup, false);
+
+        for (int i = 0; i < kitCrates.Length; i++)
+        {
+            kitCrates[i] = PlaceKitModule(cargoCratePrefab, new Vector3(-2f + i * 2f, 0.08f, -20f), 0f, "Cargo container " + (i + 1), true, true);
+            kitCrates[i].transform.SetParent(propsGroup, false);
+            if (kitCrates[i].GetComponent<BoxCollider>() == null)
+                kitCrates[i].AddComponent<BoxCollider>();
+        }
+
+        // 12. Interactables
+        AddInteractable("CORE", 0, "Take power core", new Vector3(-4f, 0.25f, 21f), true);
+        AddInteractable("CORE", 1, "Take power core", new Vector3(20.5f, 0.25f, 20.5f), true);
+        AddInteractable("CORE", 2, "Take power core", new Vector3(-21f, 0.25f, -7f), true);
+
+        // 13. Lights
+        foreach (var l in layout.Lights)
+        {
+            AddLight(l.Position, l.Range, l.Color);
+            if (corridorLights.Count > 0)
+            {
+                corridorLights[corridorLights.Count - 1].gameObject.name = l.Name;
+            }
+        }
+
+        // 14. Signs
+        foreach (var s in layout.Signs)
+        {
+            CreateSign(s.Text, s.Position, s.Yaw);
+        }
+
+        // 15. Anchors
+        var groups = new Dictionary<string, Transform>();
+        string[] groupNames = { "Start", "MedBay", "Cores", "Radio", "Escape", "Chase", "Checkpoints", "Cutscenes" };
+        foreach (var gName in groupNames)
+        {
+            GameObject grp = new GameObject(gName);
+            grp.transform.SetParent(anchorsGroup, false);
+            groups[gName] = grp.transform;
+        }
+
+        string[] cutsceneNames = { "Starting", "Lunge", "Escape", "SecretCode" };
+        Transform cutscenesRoot = groups["Cutscenes"];
+        foreach (var cName in cutsceneNames)
+        {
+            GameObject csGrp = new GameObject(cName);
+            csGrp.transform.SetParent(cutscenesRoot, false);
+        }
+
+        foreach (var a in layout.Anchors)
+        {
+            Transform parentGroup = groups.ContainsKey(a.Group) ? groups[a.Group] : anchorsGroup;
+            GameObject anchorGO = new GameObject(a.Name);
+            anchorGO.transform.SetParent(parentGroup, false);
+            anchorGO.transform.localPosition = a.Position;
+            anchorGO.transform.localRotation = Quaternion.Euler(0f, a.Yaw, 0f);
+
+            if (a.Name == "PodReachedTrigger_Volume")
+            {
+                var box = anchorGO.AddComponent<BoxCollider>();
+                box.isTrigger = true;
+                box.size = new Vector3(3f, 3f, 3f);
+            }
+        }
+    }
+
 }

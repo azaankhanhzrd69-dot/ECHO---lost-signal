@@ -76,78 +76,100 @@ namespace Echo.Editor
                 MethodInfo loadStationKitMethod = typeof(EchoGame).GetMethod("LoadStationKit", flags);
                 loadStationKitMethod?.Invoke(game, null);
 
-                // 5. Create world root ("Station - Deck 03")
-                worldRootGO = new GameObject("Station - Deck 03");
-                FieldInfo offsetField = typeof(EchoGame).GetField("StationEditorOffset", flags);
-                Vector3 offset = offsetField != null ? (Vector3)offsetField.GetValue(null) : Vector3.zero;
-                worldRootGO.transform.position = offset;
+                // W-13: Check whether to bake the new layout or the legacy deck
+                FieldInfo useNewLayoutField = typeof(EchoGame).GetField("useNewLayout", flags);
+                bool useNew = useNewLayoutField != null ? (bool)useNewLayoutField.GetValue(game) : true;
 
-                FieldInfo worldRootField = typeof(EchoGame).GetField("worldRoot", flags);
-                worldRootField?.SetValue(game, worldRootGO.transform);
-
-                // 6. Invoke procedural building methods via reflection
-                MethodInfo buildStationMethod = typeof(EchoGame).GetMethod("BuildStation", flags);
-                buildStationMethod?.Invoke(game, null);
-
-                MethodInfo buildAnnexMethod = typeof(EchoGame).GetMethod("BuildModularAnnex", flags);
-                buildAnnexMethod?.Invoke(game, null);
-
-                MethodInfo buildBackdropMethod = typeof(EchoGame).GetMethod("BuildSpaceBackdrop", flags);
-                buildBackdropMethod?.Invoke(game, null);
-
-                MethodInfo buildBlackHoleMethod = typeof(EchoGame).GetMethod("BuildBlackHole", flags);
-                buildBlackHoleMethod?.Invoke(game, null);
-
-                MethodInfo buildEscapeShipMethod = typeof(EchoGame).GetMethod("BuildEscapeShip", flags);
-                buildEscapeShipMethod?.Invoke(game, null);
-
-                MethodInfo buildDecorMethod = typeof(EchoGame).GetMethod("BuildDecor", flags);
-                buildDecorMethod?.Invoke(game, null);
-
-                // Add station interactables (cores, consoles, relays, notes, wire leads)
-                MethodInfo addInteractableMethod = typeof(EchoGame).GetMethod("AddInteractable", flags);
-                if (addInteractableMethod != null)
+                if (useNew)
                 {
-                    addInteractableMethod.Invoke(game, new object[] { "CORE", 0, "Take power core", new Vector3(8f, 0.25f, 12f), true });
-                    addInteractableMethod.Invoke(game, new object[] { "CORE", 1, "Take power core", new Vector3(8f, 0.25f, -12f), true });
-                    addInteractableMethod.Invoke(game, new object[] { "CORE", 2, "Take power core", new Vector3(18f, 0.25f, 6.5f), true });
-                    addInteractableMethod.Invoke(game, new object[] { "PUZZLE", 0, "Access breaker panel", new Vector3(19f, 0.1f, -1.5f), false });
-                    addInteractableMethod.Invoke(game, new object[] { "NOTE", 0, "Read maintenance note", new Vector3(-5.3f, 0.1f, 11f), false });
-                    addInteractableMethod.Invoke(game, new object[] { "EXIT", 0, "Open the final airlock", new Vector3(76f, 0.1f, 0f), false });
-                    addInteractableMethod.Invoke(game, new object[] { "RELAY", 0, "Align long-range relay", new Vector3(52f, 0.1f, 14f), false });
-                    addInteractableMethod.Invoke(game, new object[] { "RELAY", 1, "Align backup relay", new Vector3(52f, 0.1f, -14f), false });
-                    addInteractableMethod.Invoke(game, new object[] { "RELAY", 2, "Align cargo-bay relay", new Vector3(70f, 0.1f, 14f), false });
-                    addInteractableMethod.Invoke(game, new object[] { "LOG", 0, "Play crew recording", new Vector3(47f, 0.1f, 16f), false });
-                    addInteractableMethod.Invoke(game, new object[] { "LOG", 1, "Play crew recording", new Vector3(47f, 0.1f, -16f), false });
-                    addInteractableMethod.Invoke(game, new object[] { "LOG", 2, "Play crew recording", new Vector3(70f, 0.1f, -14f), false });
-                    addInteractableMethod.Invoke(game, new object[] { "NOTE", 1, "Read relay calibration note", new Vector3(46f, 0.1f, 17f), false });
-                    addInteractableMethod.Invoke(game, new object[] { "SUPPLY", 0, "Open emergency supply case", new Vector3(57f, 0.1f, 17f), false });
-                    addInteractableMethod.Invoke(game, new object[] { "SUPPLY", 1, "Open emergency supply case", new Vector3(57f, 0.1f, -17f), false });
-                    addInteractableMethod.Invoke(game, new object[] { "SUPPLY", 2, "Open emergency supply case", new Vector3(72f, 0.1f, -11f), false });
-                    addInteractableMethod.Invoke(game, new object[] { "COMMS", 0, "Calibrate the long-range array", new Vector3(72f, 0.1f, 0f), false });
+                    MethodInfo buildNewDeckMethod = typeof(EchoGame).GetMethod("BuildNewDeck", flags);
+                    buildNewDeckMethod?.Invoke(game, null);
 
-                    FieldInfo wiresField = typeof(EchoGame).GetField("reactorWires", flags);
-                    Array wiresArray = wiresField?.GetValue(game) as Array;
-                    int wireCount = wiresArray != null ? wiresArray.Length : 3;
-                    for (int i = 0; i < wireCount; i++)
+                    worldRootGO = GameObject.Find("STATION");
+                    if (worldRootGO != null)
                     {
-                        addInteractableMethod.Invoke(game, new object[] { "WIRE", i, "Connect reactor lead " + (i + 1), new Vector3(18.2f + i * 0.8f, 0.95f, -1.9f), false });
+                        Transform geom = worldRootGO.transform.Find("Geometry");
+                        if (geom != null)
+                        {
+                            SetStaticRecursively(geom.gameObject);
+                        }
                     }
                 }
-
-                // Create station stencils / signs
-                MethodInfo createSignMethod = typeof(EchoGame).GetMethod("CreateSign", flags);
-                if (createSignMethod != null)
+                else
                 {
-                    createSignMethod.Invoke(game, new object[] { "SPAWN  /  00", new Vector3(-25f, 2.65f, 3.72f), 0f });
-                    createSignMethod.Invoke(game, new object[] { "ENGINEERING  /  01", new Vector3(-8f, 2.65f, 3.72f), 0f });
-                    createSignMethod.Invoke(game, new object[] { "CREW QUARTERS  /  02", new Vector3(2f, 2.65f, 17.68f), 180f });
-                    createSignMethod.Invoke(game, new object[] { "CREW QUARTERS  /  03", new Vector3(2f, 2.65f, -17.68f), 0f });
-                    createSignMethod.Invoke(game, new object[] { "REACTOR  /  04", new Vector3(13.28f, 2.65f, 0f), 90f });
-                    createSignMethod.Invoke(game, new object[] { "AIRLOCK  /  05", new Vector3(25.9f, 2.65f, 0f), 90f });
-                    createSignMethod.Invoke(game, new object[] { "HYDROPONICS  /  06", new Vector3(51f, 2.8f, 19.5f), 180f });
-                    createSignMethod.Invoke(game, new object[] { "MAINTENANCE  /  07", new Vector3(51f, 2.8f, -19.5f), 0f });
-                    createSignMethod.Invoke(game, new object[] { "CARGO BAY  /  08", new Vector3(70f, 2.8f, 19.5f), 180f });
+                    // Legacy bake path
+                    worldRootGO = new GameObject("Station - Deck 03");
+                    FieldInfo offsetField = typeof(EchoGame).GetField("StationEditorOffset", flags);
+                    Vector3 offset = offsetField != null ? (Vector3)offsetField.GetValue(null) : Vector3.zero;
+                    worldRootGO.transform.position = offset;
+
+                    FieldInfo worldRootField = typeof(EchoGame).GetField("worldRoot", flags);
+                    worldRootField?.SetValue(game, worldRootGO.transform);
+
+                    // Invoke procedural building methods via reflection
+                    MethodInfo buildStationMethod = typeof(EchoGame).GetMethod("BuildStation", flags);
+                    buildStationMethod?.Invoke(game, null);
+
+                    MethodInfo buildAnnexMethod = typeof(EchoGame).GetMethod("BuildModularAnnex", flags);
+                    buildAnnexMethod?.Invoke(game, null);
+
+                    MethodInfo buildBackdropMethod = typeof(EchoGame).GetMethod("BuildSpaceBackdrop", flags);
+                    buildBackdropMethod?.Invoke(game, null);
+
+                    MethodInfo buildBlackHoleMethod = typeof(EchoGame).GetMethod("BuildBlackHole", flags);
+                    buildBlackHoleMethod?.Invoke(game, null);
+
+                    MethodInfo buildEscapeShipMethod = typeof(EchoGame).GetMethod("BuildEscapeShip", flags);
+                    buildEscapeShipMethod?.Invoke(game, null);
+
+                    MethodInfo buildDecorMethod = typeof(EchoGame).GetMethod("BuildDecor", flags);
+                    buildDecorMethod?.Invoke(game, null);
+
+                    // Add station interactables (cores, consoles, relays, notes, wire leads)
+                    MethodInfo addInteractableMethod = typeof(EchoGame).GetMethod("AddInteractable", flags);
+                    if (addInteractableMethod != null)
+                    {
+                        addInteractableMethod.Invoke(game, new object[] { "CORE", 0, "Take power core", new Vector3(8f, 0.25f, 12f), true });
+                        addInteractableMethod.Invoke(game, new object[] { "CORE", 1, "Take power core", new Vector3(8f, 0.25f, -12f), true });
+                        addInteractableMethod.Invoke(game, new object[] { "CORE", 2, "Take power core", new Vector3(18f, 0.25f, 6.5f), true });
+                        addInteractableMethod.Invoke(game, new object[] { "PUZZLE", 0, "Access breaker panel", new Vector3(19f, 0.1f, -1.5f), false });
+                        addInteractableMethod.Invoke(game, new object[] { "NOTE", 0, "Read maintenance note", new Vector3(-5.3f, 0.1f, 11f), false });
+                        addInteractableMethod.Invoke(game, new object[] { "EXIT", 0, "Open the final airlock", new Vector3(76f, 0.1f, 0f), false });
+                        addInteractableMethod.Invoke(game, new object[] { "RELAY", 0, "Align long-range relay", new Vector3(52f, 0.1f, 14f), false });
+                        addInteractableMethod.Invoke(game, new object[] { "RELAY", 1, "Align backup relay", new Vector3(52f, 0.1f, -14f), false });
+                        addInteractableMethod.Invoke(game, new object[] { "RELAY", 2, "Align cargo-bay relay", new Vector3(70f, 0.1f, 14f), false });
+                        addInteractableMethod.Invoke(game, new object[] { "LOG", 0, "Play crew recording", new Vector3(47f, 0.1f, 16f), false });
+                        addInteractableMethod.Invoke(game, new object[] { "LOG", 1, "Play crew recording", new Vector3(47f, 0.1f, -16f), false });
+                        addInteractableMethod.Invoke(game, new object[] { "LOG", 2, "Play crew recording", new Vector3(70f, 0.1f, -14f), false });
+                        addInteractableMethod.Invoke(game, new object[] { "NOTE", 1, "Read relay calibration note", new Vector3(46f, 0.1f, 17f), false });
+                        addInteractableMethod.Invoke(game, new object[] { "SUPPLY", 0, "Open emergency supply case", new Vector3(57f, 0.1f, 17f), false });
+                        addInteractableMethod.Invoke(game, new object[] { "SUPPLY", 1, "Open emergency supply case", new Vector3(57f, 0.1f, -17f), false });
+                        addInteractableMethod.Invoke(game, new object[] { "SUPPLY", 2, "Open emergency supply case", new Vector3(72f, 0.1f, -11f), false });
+                        addInteractableMethod.Invoke(game, new object[] { "COMMS", 0, "Calibrate the long-range array", new Vector3(72f, 0.1f, 0f), false });
+
+                        FieldInfo wiresField = typeof(EchoGame).GetField("reactorWires", flags);
+                        Array wiresArray = wiresField?.GetValue(game) as Array;
+                        int wireCount = wiresArray != null ? wiresArray.Length : 3;
+                        for (int i = 0; i < wireCount; i++)
+                        {
+                            addInteractableMethod.Invoke(game, new object[] { "WIRE", i, "Connect reactor lead " + (i + 1), new Vector3(18.2f + i * 0.8f, 0.95f, -1.9f), false });
+                        }
+                    }
+
+                    // Create station stencils / signs
+                    MethodInfo createSignMethod = typeof(EchoGame).GetMethod("CreateSign", flags);
+                    if (createSignMethod != null)
+                    {
+                        createSignMethod.Invoke(game, new object[] { "SPAWN  /  00", new Vector3(-25f, 2.65f, 3.72f), 0f });
+                        createSignMethod.Invoke(game, new object[] { "ENGINEERING  /  01", new Vector3(-8f, 2.65f, 3.72f), 0f });
+                        createSignMethod.Invoke(game, new object[] { "CREW QUARTERS  /  02", new Vector3(2f, 2.65f, 17.68f), 180f });
+                        createSignMethod.Invoke(game, new object[] { "CREW QUARTERS  /  03", new Vector3(2f, 2.65f, -17.68f), 0f });
+                        createSignMethod.Invoke(game, new object[] { "REACTOR  /  04", new Vector3(13.28f, 2.65f, 0f), 90f });
+                        createSignMethod.Invoke(game, new object[] { "AIRLOCK  /  05", new Vector3(25.9f, 2.65f, 0f), 90f });
+                        createSignMethod.Invoke(game, new object[] { "HYDROPONICS  /  06", new Vector3(51f, 2.8f, 19.5f), 180f });
+                        createSignMethod.Invoke(game, new object[] { "MAINTENANCE  /  07", new Vector3(51f, 2.8f, -19.5f), 0f });
+                        createSignMethod.Invoke(game, new object[] { "CARGO BAY  /  08", new Vector3(70f, 2.8f, 19.5f), 180f });
+                    }
                 }
 
                 // 7. Post-process colliders on non-solid and decorative props
@@ -420,6 +442,16 @@ namespace Echo.Editor
             }
             return raw.Replace('/', '_').Replace('\\', '_').Replace(' ', '_').Trim();
         }
+
+        private static void SetStaticRecursively(GameObject go)
+        {
+            StaticEditorFlags staticFlags = StaticEditorFlags.ContributeGI | StaticEditorFlags.NavigationStatic | StaticEditorFlags.OccluderStatic | StaticEditorFlags.BatchingStatic;
+            GameObjectUtility.SetStaticEditorFlags(go, staticFlags);
+            foreach (Transform child in go.transform)
+            {
+                SetStaticRecursively(child.gameObject);
+            }
+        }
+
     }
 }
-
