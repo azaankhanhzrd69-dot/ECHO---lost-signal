@@ -1,0 +1,138 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9e697d5829ba55442853b1887134cafc, type: 3}
+  m_Name: StationLockerAndProps
+  m_EditorClassIdentifier: Assembly-CSharp::StationLockerAndPropsConfig
+  lockerPrefab: {fileID: 5735183905496812083, guid: 2b23fd819e8890e4bae6782feabf3193, type: 3}
+  propPrefabs:
+  - {fileID: 968165214316191884, guid: bd30cfd9de03ee34c93f0cde38f32df1, type: 3}
+  - {fileID: 7080806414619094694, guid: 5a84747fa7b715147bbb89c8b55e3bcc, type: 3}
+  - {fileID: 5460261109824272427, guid: 5efca7d30a4e33b44b1adc38747ab654, type: 3}
+  - {fileID: 5758430818405753275, guid: 251651ff918d5c144885a7d7c759adbe, type: 3}
+  lockers:
+  - position: {x: -28, y: 1, z: 15}
+    yaw: 180
+  - position: {x: -28, y: 1, z: -15}
+    yaw: 0
+  - position: {x: -9, y: 1, z: 15}
+    yaw: 180
+  - position: {x: -9, y: 1, z: -15}
+    yaw: 0
+  - position: {x: 9, y: 1, z: 14}
+    yaw: 180
+  - position: {x: 9, y: 1, z: -14}
+    yaw: 0
+  - position: {x: 22, y: 1, z: 8.5}
+    yaw: 90
+  - position: {x: 22, y: 1, z: -8.5}
+    yaw: 270
+  - position: {x: 38, y: 1, z: 15}
+    yaw: 180
+  - position: {x: 38, y: 1, z: -15}
+    yaw: 0
+  - position: {x: 57, y: 1, z: 15}
+    yaw: 180
+  - position: {x: 57, y: 1, z: -15}
+    yaw: 0
+  - position: {x: 75, y: 1, z: 15}
+    yaw: 180
+  - position: {x: 75, y: 1, z: -15}
+    yaw: 0
+  props:
+  - prefabIndex: 0
+    position: {x: -30, y: 0.18, z: 18}
+    yaw: 0
+    scale: {x: 0.35, y: 0.35, z: 0.35}
+  - prefabIndex: 1
+    position: {x: -30, y: 0.18, z: -18}
+    yaw: 90
+    scale: {x: 0.42, y: 0.42, z: 0.42}
+  - prefabIndex: 2
+    position: {x: -7, y: 0.18, z: 17}
+    yaw: 180
+    scale: {x: 0.28, y: 0.28, z: 0.28}
+  - prefabIndex: 1
+    position: {x: -7, y: 0.18, z: -17}
+    yaw: 270
+    scale: {x: 0.42, y: 0.42, z: 0.42}
+  - prefabIndex: 0
+    position: {x: 10, y: 0.18, z: 16}
+    yaw: 90
+    scale: {x: 0.35, y: 0.35, z: 0.35}
+  - prefabIndex: 3
+    position: {x: 10, y: 0.18, z: -16}
+    yaw: 0
+    scale: {x: 0.28, y: 0.28, z: 0.28}
+  - prefabIndex: 2
+    position: {x: 24, y: 0.18, z: 8.5}
+    yaw: 180
+    scale: {x: 0.28, y: 0.28, z: 0.28}
+  - prefabIndex: 0
+    position: {x: 24, y: 0.18, z: -8.5}
+    yaw: 0
+    scale: {x: 0.35, y: 0.35, z: 0.35}
+  - prefabIndex: 1
+    position: {x: 37, y: 0.18, z: 18}
+    yaw: 0
+    scale: {x: 0.42, y: 0.42, z: 0.42}
+  - prefabIndex: 0
+    position: {x: 37, y: 0.18, z: -18}
+    yaw: 270
+    scale: {x: 0.35, y: 0.35, z: 0.35}
+  - prefabIndex: 3
+    position: {x: 56, y: 0.18, z: 18}
+    yaw: 90
+    scale: {x: 0.28, y: 0.28, z: 0.28}
+  - prefabIndex: 1
+    position: {x: 56, y: 0.18, z: -18}
+    yaw: 180
+    scale: {x: 0.42, y: 0.42, z: 0.42}
+  - prefabIndex: 0
+    position: {x: 77, y: 0.18, z: 18}
+    yaw: 180
+    scale: {x: 0.35, y: 0.35, z: 0.35}
+  - prefabIndex: 2
+    position: {x: 77, y: 0.18, z: -18}
+    yaw: 270
+    scale: {x: 0.28, y: 0.28, z: 0.28}
+  - prefabIndex: 1
+    position: {x: -25, y: 0.18, z: 3}
+    yaw: 0
+    scale: {x: 0.38, y: 0.38, z: 0.38}
+  - prefabIndex: 0
+    position: {x: -14, y: 0.18, z: -3}
+    yaw: 90
+    scale: {x: 0.3, y: 0.3, z: 0.3}
+  - prefabIndex: 2
+    position: {x: 2, y: 0.18, z: 3}
+    yaw: 180
+    scale: {x: 0.25, y: 0.25, z: 0.25}
+  - prefabIndex: 1
+    position: {x: 17, y: 0.18, z: -3}
+    yaw: 270
+    scale: {x: 0.38, y: 0.38, z: 0.38}
+  - prefabIndex: 0
+    position: {x: 40, y: 0.18, z: 5.2}
+    yaw: 0
+    scale: {x: 0.3, y: 0.3, z: 0.3}
+  - prefabIndex: 1
+    position: {x: 46, y: 0.18, z: -5.2}
+    yaw: 90
+    scale: {x: 0.38, y: 0.38, z: 0.38}
+  - prefabIndex: 2
+    position: {x: 56, y: 0.18, z: 5.2}
+    yaw: 180
+    scale: {x: 0.25, y: 0.25, z: 0.25}
+  - prefabIndex: 0
+    position: {x: 70, y: 0.18, z: -5.2}
+    yaw: 270
+    scale: {x: 0.3, y: 0.3, z: 0.3}
