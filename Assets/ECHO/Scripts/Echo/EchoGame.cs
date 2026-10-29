@@ -141,6 +141,7 @@ public sealed partial class EchoGame : MonoBehaviour
     private bool signalCalibrated;
     private bool flashlightOn = true;
     private bool isCrouching;
+    private bool isPlayerHidden;
     private int lastVoiceAlertTier;
     private float nextVoiceAlertTime;
     private GUIStyle titleStyle;
@@ -167,6 +168,7 @@ public sealed partial class EchoGame : MonoBehaviour
     public static EchoGame Instance { get { return instance; } }
     public bool CanEmitPulse { get { return state == GameState.Playing; } }
     public bool IsTestArena { get { return testArenaMode; } }
+    public bool IsPlayerHidden { get { return isPlayerHidden; } }
     public Transform PlayerTransform { get { return player != null ? player.transform : null; } }
     public Vector3 PlayerPosition { get { return player != null ? player.transform.localPosition : Vector3.zero; } }
 
@@ -204,6 +206,8 @@ public sealed partial class EchoGame : MonoBehaviour
 
     private void OnDestroy()
     {
+        if (isPlayerHidden)
+            EchoEvents.UnlockInput();
         if (instance == this)
             instance = null;
     }
@@ -297,6 +301,13 @@ public sealed partial class EchoGame : MonoBehaviour
         if (state != GameState.Playing)
             return;
 
+        if (isPlayerHidden)
+        {
+            if (Pressed(Key.E))
+                ExitLocker();
+            return;
+        }
+
         activeInteractable = FindNearbyInteractable();
         if (activeInteractable != null && Pressed(Key.E))
             Interact(activeInteractable);
@@ -370,6 +381,9 @@ public sealed partial class EchoGame : MonoBehaviour
                 creature.ResetCreature();
                 creature.SetVisible(true);
             }
+            if (isPlayerHidden)
+                EchoEvents.UnlockInput();
+            isPlayerHidden = false;
             activeInteractable = null;
             state = GameState.Playing;
             SetCursor(true);
@@ -531,7 +545,9 @@ public sealed partial class EchoGame : MonoBehaviour
     {
         if (item.Kind == "HIDE")
         {
-            ShowMessage("HOLD THE CENTER OF THE RING TO STAY HIDDEN.");
+            isPlayerHidden = true;
+            activeInteractable = null;
+            EchoEvents.LockInput();
             EchoEvents.StartHide(worldRoot.TransformPoint(item.transform.localPosition));
             return;
         }
@@ -681,6 +697,13 @@ public sealed partial class EchoGame : MonoBehaviour
                 SetCursor(false);
             }
         }
+    }
+
+    private void ExitLocker()
+    {
+        isPlayerHidden = false;
+        EchoEvents.UnlockInput();
+        ShowMessage("You leave the locker.");
     }
 
     private bool IsInCoolantLeak()
@@ -960,6 +983,12 @@ public sealed partial class EchoGame : MonoBehaviour
     private void OnGUI()
     {
         EnsureStyles();
+        if (isPlayerHidden && state == GameState.Playing)
+        {
+            DrawLockerOverlay();
+            return;
+        }
+
         if (testArenaMode && state == GameState.Playing)
         {
             DrawTestArenaHud();
@@ -999,6 +1028,16 @@ public sealed partial class EchoGame : MonoBehaviour
                     DrawEndCard(endingTitle, endingBody, "ENTER  /  PLAY AGAIN");
                 break;
         }
+    }
+
+    private void DrawLockerOverlay()
+    {
+        DrawOverlay(new Color(0.002f, 0.004f, 0.006f, 0.92f));
+        float center = Screen.width * 0.5f;
+        GUI.Label(new Rect(center - 260f, Screen.height * 0.5f - 42f, 520f, 48f),
+            "HIDDEN IN LOCKER", headingStyle);
+        GUI.Label(new Rect(center - 260f, Screen.height * 0.5f + 12f, 520f, 32f),
+            "Press E to leave", subtitleStyle);
     }
 
     private void DrawTestArenaHud()

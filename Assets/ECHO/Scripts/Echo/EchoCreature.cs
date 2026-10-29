@@ -306,6 +306,17 @@ public sealed class EchoCreature : MonoBehaviour
         if (game == null || !game.CanEmitPulse)
             return;
 
+        if (game.IsPlayerHidden)
+        {
+            investigating = false;
+            wasInvestigating = false;
+            if (footstepSource != null && footstepSource.isPlaying)
+                footstepSource.Stop();
+            SetVisible(false);
+            SetAnimation(false);
+            return;
+        }
+
         float distance = Vector3.Distance(transform.localPosition, game.PlayerPosition);
         float detectRange = game.IsCrouching ? 8.5f : 20f;
         if (game.FlashlightOn)

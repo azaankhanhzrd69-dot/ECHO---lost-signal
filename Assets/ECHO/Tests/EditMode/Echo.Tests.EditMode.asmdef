@@ -4,6 +4,7 @@
         "Echo.Core",
         "Echo.Shared",
         "Echo.Interact",
+        "Echo.World",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],
@@ -23,4 +24,3 @@
     "versionDefines": [],
     "noEngineReferences": false
 }
-

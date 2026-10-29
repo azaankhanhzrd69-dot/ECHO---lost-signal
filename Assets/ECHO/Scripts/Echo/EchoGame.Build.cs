@@ -102,6 +102,58 @@ public sealed partial class EchoGame : MonoBehaviour
             CreateSign("MAINTENANCE  /  07", new Vector3(51f, 2.8f, -19.5f), 0f);
             CreateSign("CARGO BAY  /  08", new Vector3(70f, 2.8f, 19.5f), 180f);
         }
+
+        if (!testArenaMode)
+            BuildRoomLockersAndProps();
+    }
+
+    private void BuildRoomLockersAndProps()
+    {
+        StationLockerAndPropsConfig config =
+            Resources.Load<StationLockerAndPropsConfig>("StationLockerAndProps");
+        if (config == null)
+        {
+            Debug.LogWarning(
+                "[EchoGame] Station locker and prop configuration is missing. Run ECHO > W-07 > Configure Station Lockers and Props.",
+                this);
+            return;
+        }
+
+        if (config.LockerPrefab == null)
+            throw new System.InvalidOperationException("The station locker prefab is not assigned in StationLockerAndProps.");
+
+        for (int i = 0; i < config.Lockers.Length; i++)
+        {
+            StationLockerAndPropsConfig.LockerPlacement placement = config.Lockers[i];
+            GameObject locker = Instantiate(config.LockerPrefab, worldRoot, false);
+            locker.name = "Hide locker " + (i + 1).ToString("D2");
+            locker.transform.localPosition = placement.position;
+            locker.transform.localRotation = Quaternion.Euler(0f, placement.yaw, 0f);
+
+            EchoInteractable interactable = locker.GetComponent<EchoInteractable>();
+            if (interactable == null)
+                interactable = locker.AddComponent<EchoInteractable>();
+            interactable.Initialize("HIDE", i, "Hide in locker");
+            interactables.Add(interactable);
+        }
+
+        GameObject[] propPrefabs = config.PropPrefabs;
+        for (int i = 0; i < config.Props.Length; i++)
+        {
+            StationLockerAndPropsConfig.PropPlacement placement = config.Props[i];
+            if (placement.prefabIndex < 0 || placement.prefabIndex >= propPrefabs.Length)
+                throw new System.InvalidOperationException(
+                    "Station prop placement " + i + " references an invalid prefab index.");
+            if (propPrefabs[placement.prefabIndex] == null)
+                throw new System.InvalidOperationException(
+                    "Station prop prefab " + placement.prefabIndex + " is not assigned.");
+
+            GameObject prop = Instantiate(propPrefabs[placement.prefabIndex], worldRoot, false);
+            prop.name = propPrefabs[placement.prefabIndex].name + " / station corner prop " + (i + 1);
+            prop.transform.localPosition = placement.position;
+            prop.transform.localRotation = Quaternion.Euler(0f, placement.yaw, 0f);
+            prop.transform.localScale = placement.scale;
+        }
     }
 
     private void CollectBakedStationReferences()
@@ -1189,9 +1241,9 @@ public sealed partial class EchoGame : MonoBehaviour
         Light torch = flashlight.AddComponent<Light>();
         torch.type = LightType.Spot;
         torch.color = new Color(0.72f, 0.88f, 1f);
-        torch.range = 8.5f;
-        torch.spotAngle = 44f;
-        torch.intensity = 1.85f;
+        torch.range = 22f;
+        torch.spotAngle = 78f;
+        torch.intensity = 3.2f;
         torch.shadows = LightShadows.Soft;
         playerMotor.SetFlashlight(torch);
         playerMotor.SetFootstepAudio(footstepClips);
