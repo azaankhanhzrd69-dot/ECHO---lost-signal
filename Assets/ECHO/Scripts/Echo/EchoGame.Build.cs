@@ -3,6 +3,24 @@ using UnityEngine;
 
 public sealed partial class EchoGame : MonoBehaviour
 {
+    private static readonly Vector3[] LockerCornerPositions =
+    {
+        new Vector3(-31.5f, 1f, 19.5f),
+        new Vector3(-31.5f, 1f, -19.5f),
+        new Vector3(-12.5f, 1f, 19.5f),
+        new Vector3(-12.5f, 1f, -19.5f),
+        new Vector3(12.5f, 1f, 17.5f),
+        new Vector3(12.5f, 1f, -17.5f),
+        new Vector3(25.5f, 1f, 9.5f),
+        new Vector3(25.5f, 1f, -9.5f),
+        new Vector3(41.5f, 1f, 19.5f),
+        new Vector3(41.5f, 1f, -19.5f),
+        new Vector3(42.5f, 1f, 19.5f),
+        new Vector3(42.5f, 1f, -19.5f),
+        new Vector3(79.5f, 1f, 19.5f),
+        new Vector3(79.5f, 1f, -19.5f)
+    };
+
     // C-03c: "Built map" flag. When true, loads the pre-baked station and lights from scene instead of runtime build.
     [Tooltip("When true, loads pre-baked station geometry and lighting from the scene instead of procedurally building it at runtime. Set in Inspector on the EchoGame host GameObject.")]
     [SerializeField] private bool useBakedStation = false;
@@ -121,14 +139,18 @@ public sealed partial class EchoGame : MonoBehaviour
 
         if (config.LockerPrefab == null)
             throw new System.InvalidOperationException("The station locker prefab is not assigned in StationLockerAndProps.");
+        if (config.Lockers == null || config.Lockers.Length != LockerCornerPositions.Length)
+            throw new System.InvalidOperationException(
+                "The station locker configuration must contain one placement for every room.");
 
         for (int i = 0; i < config.Lockers.Length; i++)
         {
             StationLockerAndPropsConfig.LockerPlacement placement = config.Lockers[i];
             GameObject locker = Instantiate(config.LockerPrefab, worldRoot, false);
             locker.name = "Hide locker " + (i + 1).ToString("D2");
-            locker.transform.localPosition = placement.position;
+            locker.transform.localPosition = LockerCornerPositions[i];
             locker.transform.localRotation = Quaternion.Euler(0f, placement.yaw, 0f);
+            ApplyImportedMaterials(locker);
 
             EchoInteractable interactable = locker.GetComponent<EchoInteractable>();
             if (interactable == null)
@@ -904,7 +926,7 @@ public sealed partial class EchoGame : MonoBehaviour
             cell.transform.localPosition = new Vector3(18.2f + i * 0.8f, 1.13f, -1.9f);
             cell.transform.localRotation = Quaternion.Euler(0f, i * 35f, 0f);
             cell.transform.localScale = Vector3.one * 0.62f;
-            ApplyEnergyCellMaterials(cell);
+            ApplyImportedMaterials(cell);
             Renderer[] renderers = cell.GetComponentsInChildren<Renderer>(true);
             if (renderers.Length == 0)
                 throw new System.InvalidOperationException("The imported reactor cell prefab has no renderers.");
@@ -990,9 +1012,9 @@ public sealed partial class EchoGame : MonoBehaviour
         return count;
     }
 
-    private void ApplyEnergyCellMaterials(GameObject cell)
+    private void ApplyImportedMaterials(GameObject importedObject)
     {
-        Renderer[] renderers = cell.GetComponentsInChildren<Renderer>(true);
+        Renderer[] renderers = importedObject.GetComponentsInChildren<Renderer>(true);
         for (int rendererIndex = 0; rendererIndex < renderers.Length; rendererIndex++)
         {
             Material[] sourceMaterials = renderers[rendererIndex].sharedMaterials;
@@ -1001,12 +1023,12 @@ public sealed partial class EchoGame : MonoBehaviour
             {
                 Material source = sourceMaterials[materialIndex];
                 if (source == null)
-                    throw new System.InvalidOperationException("The imported energy-cell prefab contains a missing material.");
+                    throw new System.InvalidOperationException("The imported prefab contains a missing material.");
 
                 Material converted;
                 if (!convertedCellMaterials.TryGetValue(source, out converted))
                 {
-                    converted = CreateEnergyCellMaterial(source);
+                    converted = CreateUrpMaterial(source);
                     convertedCellMaterials.Add(source, converted);
                 }
 
@@ -1017,8 +1039,13 @@ public sealed partial class EchoGame : MonoBehaviour
         }
     }
 
-    private Material CreateEnergyCellMaterial(Material source)
+    private Material CreateUrpMaterial(Material source)
     {
+        if (materialTemplate == null)
+            materialTemplate = Resources.Load<Material>("EchoLit");
+        if (materialTemplate == null || materialTemplate.shader == null)
+            throw new System.InvalidOperationException("The EchoLit material and its URP/Lit shader are required.");
+
         Material converted = new Material(materialTemplate);
         CopyCellTexture(source, converted, "_MainTex", "_BaseMap");
         CopyCellTexture(source, converted, "_BumpMap", "_BumpMap");
@@ -1345,7 +1372,7 @@ public sealed partial class EchoGame : MonoBehaviour
             cell.transform.localPosition = Vector3.zero;
             cell.transform.localRotation = Quaternion.Euler(index == 0 ? 88f : index == 1 ? 72f : 76f, index * 71f, 18f);
             cell.transform.localScale = Vector3.one * 0.8f;
-            ApplyEnergyCellMaterials(cell);
+            ApplyImportedMaterials(cell);
             Renderer[] cellRenderers = cell.GetComponentsInChildren<Renderer>(true);
             if (cellRenderers.Length == 0)
                 throw new System.InvalidOperationException("The imported power-cell prefab has no renderers.");
