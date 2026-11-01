@@ -27,6 +27,12 @@ public sealed partial class EchoGame : MonoBehaviour
 
     private void BuildGame()
     {
+        if (!testArenaMode && !useBakedStation && GameObject.Find("Station - Deck 03") != null)
+        {
+            useBakedStation = true;
+            Debug.Log("[EchoGame] Found the saved station in this scene. Using baked geometry.");
+        }
+
         if (testArenaMode)
         {
             RenderSettings.ambientMode = UnityEngine.Rendering.AmbientMode.Flat;
@@ -74,6 +80,7 @@ public sealed partial class EchoGame : MonoBehaviour
         else
         {
             CollectBakedStationReferences();
+            LoadBakedGameplayAssets();
         }
 
         LoadStationAudio();
@@ -121,7 +128,7 @@ public sealed partial class EchoGame : MonoBehaviour
             CreateSign("CARGO BAY  /  08", new Vector3(70f, 2.8f, 19.5f), 180f);
         }
 
-        if (!testArenaMode)
+        if (!testArenaMode && !useBakedStation)
             BuildRoomLockersAndProps();
     }
 
@@ -188,7 +195,8 @@ public sealed partial class EchoGame : MonoBehaviour
         }
         else
         {
-            Debug.LogWarning("[EchoGame] Baked station root 'Station - Deck 03' not found in scene.");
+            throw new System.InvalidOperationException(
+                "Baked station mode is enabled, but the scene does not contain 'Station - Deck 03'.");
         }
 
         // 2. Blast doors (doors count)
@@ -352,6 +360,7 @@ public sealed partial class EchoGame : MonoBehaviour
         Camera sceneCam = Camera.main;
         if (sceneCam != null)
         {
+            sceneCam.enabled = false;
             AudioListener listener = sceneCam.GetComponent<AudioListener>();
             if (listener != null) listener.enabled = false;
         }
@@ -392,6 +401,16 @@ public sealed partial class EchoGame : MonoBehaviour
             LoadKitModule("EnergyCell_Type1"),
             LoadKitModule("EnergyCell_Type2")
         };
+    }
+
+    private void LoadBakedGameplayAssets()
+    {
+        materialTemplate = Resources.Load<Material>("EchoLit");
+        if (materialTemplate == null || materialTemplate.shader == null)
+            throw new System.InvalidOperationException(
+                "The baked station requires the EchoLit material and its URP/Lit shader to start gameplay.");
+
+        monsterPrefab = LoadKitModule("MonsterMutant7_Skin1");
     }
 
     private void LoadStationAudio()
@@ -670,7 +689,7 @@ public sealed partial class EchoGame : MonoBehaviour
         }
 
         texture.SetPixels(pixels);
-        texture.Apply(false, true);
+        texture.Apply(false, Application.isPlaying);
         Shader skyShader = Shader.Find("Skybox/Panoramic");
         if (skyShader == null)
             throw new System.InvalidOperationException("The Unity panoramic skybox shader is required for the nebula sky.");

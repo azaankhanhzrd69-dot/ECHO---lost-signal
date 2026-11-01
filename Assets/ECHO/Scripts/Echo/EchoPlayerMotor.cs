@@ -71,14 +71,17 @@ public sealed class EchoPlayerMotor : MonoBehaviour
 
     private void Update()
     {
-        if (!controlsEnabled || EchoEvents.InputLocked || Keyboard.current == null || Mouse.current == null)
+        if (!controlsEnabled || EchoEvents.InputLocked || Keyboard.current == null)
             return;
 
-        Vector2 look = Mouse.current.delta.ReadValue() * 0.08f;
-        yaw += look.x;
-        pitch = Mathf.Clamp(pitch - look.y, -82f, 82f);
-        transform.rotation = Quaternion.Euler(0f, yaw, 0f);
-        playerCamera.transform.localRotation = Quaternion.Euler(pitch, 0f, 0f);
+        if (Mouse.current != null)
+        {
+            Vector2 look = Mouse.current.delta.ReadValue() * 0.08f;
+            yaw += look.x;
+            pitch = Mathf.Clamp(pitch - look.y, -82f, 82f);
+            transform.rotation = Quaternion.Euler(0f, yaw, 0f);
+            playerCamera.transform.localRotation = Quaternion.Euler(pitch, 0f, 0f);
+        }
 
         Vector2 input = Vector2.zero;
         Keyboard keyboard = Keyboard.current;
@@ -131,4 +134,3 @@ public sealed class EchoPlayerMotor : MonoBehaviour
         playerCamera.transform.localPosition = Vector3.Lerp(playerCamera.transform.localPosition, cameraPosition, Time.deltaTime * 14f);
     }
 }
-

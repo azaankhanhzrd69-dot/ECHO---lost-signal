@@ -346,6 +346,8 @@ public sealed partial class EchoGame : MonoBehaviour
 
     private void StartGame()
     {
+        Time.timeScale = 1f;
+        EchoEvents.UnlockInput();
         state = GameState.Playing;
         SetCursor(true);
         ShowMessage("Spawn hatch is open. Recover the three power cells and return them to the reactor.");

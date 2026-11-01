@@ -10,48 +10,76 @@ using UnityEngine.SceneManagement;
 namespace Echo.Editor
 {
     /// <summary>
-    /// Editor tool to bake the procedural station into a permanent scene (Assets/ECHO/Scenes/Station_Baked.unity).
-    /// Runs station generation in Edit Mode via reflection on EchoGame without modifying runtime gameplay code.
-    /// Persists procedural materials, textures (PNG), and meshes as assets.
+    /// Generates the station into the active scene in Edit Mode and persists procedural assets.
     /// </summary>
     public static class StationBaker
     {
-        private const string ScenePath = "Assets/ECHO/Scenes/Station_Baked.unity";
         private const string MaterialDir = "Assets/ECHO/Generated/Materials";
         private const string TextureDir = "Assets/ECHO/Generated/Textures";
         private const string MeshDir = "Assets/ECHO/Generated/Meshes";
         private const string SceneDir = "Assets/ECHO/Scenes";
 
-        [MenuItem("ECHO/Bake Station", priority = 100)]
-        public static void BakeStation()
+        [MenuItem("ECHO/World Builder/Generate Complete Station", priority = 100)]
+        public static void GenerateCompleteStation()
         {
             if (EditorApplication.isPlaying)
             {
-                EditorUtility.DisplayDialog("ECHO Station Baker", "Cannot bake station while in Play Mode. Please exit Play Mode first.", "OK");
+                EditorUtility.DisplayDialog("ECHO World Builder", "Exit Play Mode before generating the station.", "OK");
                 return;
             }
 
-            Debug.Log("[ECHO] Starting station bake process...");
+            Scene scene = EditorSceneManager.GetActiveScene();
+            if (Application.isBatchMode && (!scene.IsValid() || string.IsNullOrEmpty(scene.path)))
+            {
+                scene = EditorSceneManager.OpenScene(
+                    "Assets/ECHO/Scenes/Station_Baked.unity",
+                    OpenSceneMode.Single);
+            }
 
-            // 1. Ensure output directories exist
+            if (!scene.IsValid())
+            {
+                EditorUtility.DisplayDialog("ECHO World Builder", "There is no valid active scene.", "OK");
+                return;
+            }
+
+            string savePath = scene.path;
+            if (string.IsNullOrEmpty(savePath))
+            {
+                savePath = EditorUtility.SaveFilePanelInProject(
+                    "Save Generated ECHO Scene", "Station", "unity",
+                    "Choose where to save the generated station scene.", SceneDir);
+                if (string.IsNullOrEmpty(savePath))
+                    return;
+            }
+
+            if (!Application.isBatchMode && !EditorUtility.DisplayDialog(
+                    "Generate Complete Station",
+                    "Regenerate the station in the active scene and save it. Other scene objects will be preserved.",
+                    "Generate",
+                    "Cancel"))
+                return;
+
             EnsureDirectories();
 
-            // 2. Create fresh empty scene
-            Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
+            const string generatedRootName = "Station - Deck 03";
+            const string stagingRootName = "__ECHO_StationBuild";
+            const string bakedModeFieldName = "useBakedStation";
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public;
+            int undoGroup = Undo.GetCurrentGroup();
+            Undo.SetCurrentGroupName("Generate Complete ECHO Station");
+            Undo.IncrementCurrentGroup();
 
-            // 3. Create temporary GameObject holding EchoGame (kept inactive so Awake does not execute runtime player/creature/audio logic)
             GameObject tempController = new GameObject("__StationBaker_TempController");
             tempController.SetActive(false);
+            SceneManager.MoveGameObjectToScene(tempController, scene);
             EchoGame game = tempController.AddComponent<EchoGame>();
-
-            // Reflection binding flags
-            const BindingFlags flags = BindingFlags.Instance | BindingFlags.Static | BindingFlags.NonPublic | BindingFlags.Public;
-
-            // Set static instance so MakeMaterial -> Instance.materialTemplate resolves
-            FieldInfo instanceField = typeof(EchoGame).GetField("instance", flags);
-            instanceField?.SetValue(null, game);
-
-            GameObject worldRootGO = null;
+            FieldInfo instanceField = GetRequiredField(typeof(EchoGame), "instance", flags);
+            instanceField.SetValue(null, game);
+            GameObject worldRootGO = new GameObject(stagingRootName);
+            SceneManager.MoveGameObjectToScene(worldRootGO, scene);
+            Undo.RegisterCreatedObjectUndo(worldRootGO, "Generate Complete ECHO Station");
+            GameObject[] oldStationRoots = GetStationRoots(scene, generatedRootName);
+            bool generationCompleted = false;
 
             try
             {
@@ -64,49 +92,26 @@ namespace Echo.Editor
                 RenderSettings.fogMode = FogMode.Exponential;
                 RenderSettings.fogDensity = 0.065f;
 
-                // Build panoramic nebula skybox via reflection
-                MethodInfo buildSkyboxMethod = typeof(EchoGame).GetMethod("BuildNebulaSkybox", flags);
-                buildSkyboxMethod?.Invoke(game, null);
+                InvokeRequired(game, "BuildNebulaSkybox", flags);
+                InvokeRequired(game, "CreateMaterials", flags);
+                InvokeRequired(game, "LoadStationKit", flags);
 
-                // Create station materials via reflection
-                MethodInfo createMaterialsMethod = typeof(EchoGame).GetMethod("CreateMaterials", flags);
-                createMaterialsMethod?.Invoke(game, null);
-
-                // Load station kit prefabs via reflection (does NOT call LoadStationAudio to avoid missing audio crashes)
-                MethodInfo loadStationKitMethod = typeof(EchoGame).GetMethod("LoadStationKit", flags);
-                loadStationKitMethod?.Invoke(game, null);
-
-                // 5. Create world root ("Station - Deck 03")
-                worldRootGO = new GameObject("Station - Deck 03");
-                FieldInfo offsetField = typeof(EchoGame).GetField("StationEditorOffset", flags);
-                Vector3 offset = offsetField != null ? (Vector3)offsetField.GetValue(null) : Vector3.zero;
+                FieldInfo offsetField = GetRequiredField(typeof(EchoGame), "StationEditorOffset", flags);
+                Vector3 offset = (Vector3)offsetField.GetValue(null);
                 worldRootGO.transform.position = offset;
 
-                FieldInfo worldRootField = typeof(EchoGame).GetField("worldRoot", flags);
-                worldRootField?.SetValue(game, worldRootGO.transform);
+                FieldInfo worldRootField = GetRequiredField(typeof(EchoGame), "worldRoot", flags);
+                worldRootField.SetValue(game, worldRootGO.transform);
 
-                // 6. Invoke procedural building methods via reflection
-                MethodInfo buildStationMethod = typeof(EchoGame).GetMethod("BuildStation", flags);
-                buildStationMethod?.Invoke(game, null);
-
-                MethodInfo buildAnnexMethod = typeof(EchoGame).GetMethod("BuildModularAnnex", flags);
-                buildAnnexMethod?.Invoke(game, null);
-
-                MethodInfo buildBackdropMethod = typeof(EchoGame).GetMethod("BuildSpaceBackdrop", flags);
-                buildBackdropMethod?.Invoke(game, null);
-
-                MethodInfo buildBlackHoleMethod = typeof(EchoGame).GetMethod("BuildBlackHole", flags);
-                buildBlackHoleMethod?.Invoke(game, null);
-
-                MethodInfo buildEscapeShipMethod = typeof(EchoGame).GetMethod("BuildEscapeShip", flags);
-                buildEscapeShipMethod?.Invoke(game, null);
-
-                MethodInfo buildDecorMethod = typeof(EchoGame).GetMethod("BuildDecor", flags);
-                buildDecorMethod?.Invoke(game, null);
+                InvokeRequired(game, "BuildStation", flags);
+                InvokeRequired(game, "BuildModularAnnex", flags);
+                InvokeRequired(game, "BuildSpaceBackdrop", flags);
+                InvokeRequired(game, "BuildBlackHole", flags);
+                InvokeRequired(game, "BuildEscapeShip", flags);
+                InvokeRequired(game, "BuildDecor", flags);
 
                 // Add station interactables (cores, consoles, relays, notes, wire leads)
-                MethodInfo addInteractableMethod = typeof(EchoGame).GetMethod("AddInteractable", flags);
-                if (addInteractableMethod != null)
+                MethodInfo addInteractableMethod = GetRequiredMethod(typeof(EchoGame), "AddInteractable", flags);
                 {
                     addInteractableMethod.Invoke(game, new object[] { "CORE", 0, "Take power core", new Vector3(8f, 0.25f, 12f), true });
                     addInteractableMethod.Invoke(game, new object[] { "CORE", 1, "Take power core", new Vector3(8f, 0.25f, -12f), true });
@@ -126,18 +131,18 @@ namespace Echo.Editor
                     addInteractableMethod.Invoke(game, new object[] { "SUPPLY", 2, "Open emergency supply case", new Vector3(72f, 0.1f, -11f), false });
                     addInteractableMethod.Invoke(game, new object[] { "COMMS", 0, "Calibrate the long-range array", new Vector3(72f, 0.1f, 0f), false });
 
-                    FieldInfo wiresField = typeof(EchoGame).GetField("reactorWires", flags);
-                    Array wiresArray = wiresField?.GetValue(game) as Array;
-                    int wireCount = wiresArray != null ? wiresArray.Length : 3;
-                    for (int i = 0; i < wireCount; i++)
+                    FieldInfo wiresField = GetRequiredField(typeof(EchoGame), "reactorWires", flags);
+                    Array wiresArray = wiresField.GetValue(game) as Array;
+                    if (wiresArray == null)
+                        throw new InvalidOperationException("EchoGame.reactorWires is not an array.");
+                    for (int i = 0; i < wiresArray.Length; i++)
                     {
                         addInteractableMethod.Invoke(game, new object[] { "WIRE", i, "Connect reactor lead " + (i + 1), new Vector3(18.2f + i * 0.8f, 0.95f, -1.9f), false });
                     }
                 }
 
                 // Create station stencils / signs
-                MethodInfo createSignMethod = typeof(EchoGame).GetMethod("CreateSign", flags);
-                if (createSignMethod != null)
+                MethodInfo createSignMethod = GetRequiredMethod(typeof(EchoGame), "CreateSign", flags);
                 {
                     createSignMethod.Invoke(game, new object[] { "SPAWN  /  00", new Vector3(-25f, 2.65f, 3.72f), 0f });
                     createSignMethod.Invoke(game, new object[] { "ENGINEERING  /  01", new Vector3(-8f, 2.65f, 3.72f), 0f });
@@ -150,40 +155,175 @@ namespace Echo.Editor
                     createSignMethod.Invoke(game, new object[] { "CARGO BAY  /  08", new Vector3(70f, 2.8f, 19.5f), 180f });
                 }
 
-                // 7. Post-process colliders on non-solid and decorative props
-                // (In Edit Mode, Object.Destroy logs an error and fails to remove components; DestroyImmediate ensures correct collision state)
+                InvokeRequired(game, "BuildRoomLockersAndProps", flags);
                 CleanUpNonSolidColliders(worldRootGO);
 
-                // 8. Re-enable all mesh renderers so the baked station is fully visible
-                // (EchoPulseReveal.Prepare disables renderers for the dropped sonar ping)
                 Renderer[] allRenderers = worldRootGO.GetComponentsInChildren<Renderer>(true);
                 for (int i = 0; i < allRenderers.Length; i++)
                 {
                     allRenderers[i].enabled = true;
                 }
 
-                // 9. Persist all procedural assets (Textures, Meshes, Materials) to disk
                 PersistGeneratedAssets(worldRootGO);
-
                 Debug.Log("[ECHO] All procedural station assets persisted.");
+
+                OrganizeStationHierarchy(worldRootGO.transform);
+                worldRootGO.name = generatedRootName;
+                EchoGame sceneGame = GetOrCreateSceneGame(scene, game);
+                ConfigureBakedGame(sceneGame, bakedModeFieldName);
+                for (int i = 0; i < oldStationRoots.Length; i++)
+                {
+                    if (oldStationRoots[i] != null && oldStationRoots[i] != worldRootGO)
+                        Undo.DestroyObjectImmediate(oldStationRoots[i]);
+                }
+
+                generationCompleted = true;
+            }
+            catch
+            {
+                Undo.RevertAllDownToGroup(undoGroup);
+                throw;
             }
             finally
             {
-                // 10. Clean up temporary controller
-                instanceField?.SetValue(null, null);
+                instanceField.SetValue(null, null);
                 if (tempController != null)
                 {
                     UnityEngine.Object.DestroyImmediate(tempController);
                 }
+                if (!generationCompleted && worldRootGO != null)
+                    UnityEngine.Object.DestroyImmediate(worldRootGO);
             }
 
-            // 11. Save baked scene
-            EditorSceneManager.SaveScene(scene, ScenePath);
+            if (!EditorSceneManager.SaveScene(scene, savePath))
+                throw new InvalidOperationException("Unity could not save the generated station scene to " + savePath + ".");
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 
-            EditorUtility.DisplayDialog("ECHO Station Baker", $"Station successfully baked to:\n{ScenePath}\n\nGenerated assets saved under Assets/ECHO/Generated/", "OK");
-            Debug.Log($"[ECHO] Station bake complete. Saved scene to {ScenePath}");
+            Undo.CollapseUndoOperations(undoGroup);
+            Selection.activeGameObject = worldRootGO;
+            EditorGUIUtility.PingObject(worldRootGO);
+            SceneView sceneView = SceneView.lastActiveSceneView;
+            if (sceneView != null)
+                sceneView.FrameSelected();
+
+            if (!Application.isBatchMode)
+            {
+                EditorUtility.DisplayDialog(
+                    "ECHO World Builder",
+                    "Station generated in the active scene and saved to:\n" + savePath +
+                    "\n\nGenerated materials, textures, and meshes are saved under Assets/ECHO/Generated/.",
+                    "OK");
+            }
+            Debug.Log("[ECHO] Complete station generated in " + savePath);
+        }
+
+        private static FieldInfo GetRequiredField(Type type, string name, BindingFlags flags)
+        {
+            FieldInfo field = type.GetField(name, flags);
+            if (field == null)
+                throw new MissingFieldException(type.FullName, name);
+            return field;
+        }
+
+        private static MethodInfo GetRequiredMethod(Type type, string name, BindingFlags flags)
+        {
+            MethodInfo method = type.GetMethod(name, flags);
+            if (method == null)
+                throw new MissingMethodException(type.FullName, name);
+            return method;
+        }
+
+        private static void InvokeRequired(EchoGame game, string methodName, BindingFlags flags)
+        {
+            GetRequiredMethod(typeof(EchoGame), methodName, flags).Invoke(game, null);
+        }
+
+        private static GameObject[] GetStationRoots(Scene scene, string rootName)
+        {
+            List<GameObject> roots = new List<GameObject>();
+            GameObject[] sceneRoots = scene.GetRootGameObjects();
+            for (int i = 0; i < sceneRoots.Length; i++)
+            {
+                if (sceneRoots[i].name == rootName)
+                    roots.Add(sceneRoots[i]);
+            }
+            return roots.ToArray();
+        }
+
+        private static EchoGame GetOrCreateSceneGame(Scene scene, EchoGame temporaryGame)
+        {
+            EchoGame[] sceneGames = UnityEngine.Object.FindObjectsByType<EchoGame>(FindObjectsInactive.Include);
+            EchoGame found = null;
+            for (int i = 0; i < sceneGames.Length; i++)
+            {
+                if (sceneGames[i] == temporaryGame || sceneGames[i].gameObject.scene != scene)
+                    continue;
+                if (found != null)
+                    throw new InvalidOperationException("The active scene contains more than one EchoGame component.");
+                found = sceneGames[i];
+            }
+
+            if (found != null)
+                return found;
+
+            GameObject host = new GameObject("ECHO - THE LAST SIGNAL");
+            SceneManager.MoveGameObjectToScene(host, scene);
+            Undo.RegisterCreatedObjectUndo(host, "Add ECHO Gameplay Host");
+            return host.AddComponent<EchoGame>();
+        }
+
+        private static void ConfigureBakedGame(EchoGame game, string bakedModeFieldName)
+        {
+            SerializedObject serializedGame = new SerializedObject(game);
+            SerializedProperty bakedMode = serializedGame.FindProperty(bakedModeFieldName);
+            if (bakedMode == null)
+                throw new MissingFieldException(typeof(EchoGame).FullName, bakedModeFieldName);
+
+            Undo.RecordObject(game, "Enable Baked ECHO Station");
+            bakedMode.boolValue = true;
+            serializedGame.ApplyModifiedProperties();
+            EditorUtility.SetDirty(game);
+        }
+
+        private static void OrganizeStationHierarchy(Transform stationRoot)
+        {
+            Transform core = CreateGroup(stationRoot, "01 - Station Core");
+            Transform annex = CreateGroup(stationRoot, "02 - Modular Annex");
+            Transform extraction = CreateGroup(stationRoot, "03 - Extraction");
+            Transform exterior = CreateGroup(stationRoot, "04 - Exterior and Backdrop");
+
+            List<Transform> generatedObjects = new List<Transform>();
+            for (int i = 0; i < stationRoot.childCount; i++)
+            {
+                Transform child = stationRoot.GetChild(i);
+                if (child != core && child != annex && child != extraction && child != exterior)
+                    generatedObjects.Add(child);
+            }
+
+            for (int i = 0; i < generatedObjects.Count; i++)
+            {
+                Transform child = generatedObjects[i];
+                Vector3 position = child.localPosition;
+                Transform group;
+                if (Mathf.Abs(position.z) > 30f || position.x < -48f || position.x > 90f)
+                    group = exterior;
+                else if (position.x < 32f)
+                    group = core;
+                else if (position.x <= 83f)
+                    group = annex;
+                else
+                    group = extraction;
+
+                child.SetParent(group, false);
+            }
+        }
+
+        private static Transform CreateGroup(Transform parent, string name)
+        {
+            GameObject group = new GameObject(name);
+            group.transform.SetParent(parent, false);
+            return group.transform;
         }
 
         private static void EnsureDirectories()
@@ -245,6 +385,7 @@ namespace Echo.Editor
                 if (!AssetDatabase.Contains(skyboxMat))
                 {
                     string skyMatPath = $"{MaterialDir}/Skybox_AuroraNebula.mat";
+                    skyboxMat.name = Path.GetFileNameWithoutExtension(skyMatPath);
                     Material existingSkyMat = AssetDatabase.LoadAssetAtPath<Material>(skyMatPath);
                     if (existingSkyMat != null)
                     {
@@ -324,29 +465,24 @@ namespace Echo.Editor
             string safeName = SanitizeName(string.IsNullOrEmpty(sourceTex.name) ? defaultName : sourceTex.name);
             string pngPath = $"{TextureDir}/{safeName}.png";
 
-            try
-            {
-                byte[] bytes = sourceTex.EncodeToPNG();
-                File.WriteAllBytes(pngPath, bytes);
-                AssetDatabase.ImportAsset(pngPath, ImportAssetOptions.ForceUpdate);
+            byte[] bytes = sourceTex.EncodeToPNG();
+            File.WriteAllBytes(pngPath, bytes);
+            AssetDatabase.ImportAsset(pngPath, ImportAssetOptions.ForceUpdate);
 
-                TextureImporter importer = AssetImporter.GetAtPath(pngPath) as TextureImporter;
-                if (importer != null)
-                {
-                    importer.textureType = TextureImporterType.Default;
-                    importer.wrapMode = TextureWrapMode.Repeat;
-                    importer.SaveAndReimport();
-                }
-
-                Texture2D loaded = AssetDatabase.LoadAssetAtPath<Texture2D>(pngPath);
-                cache[sourceTex] = loaded;
-                return loaded;
-            }
-            catch (Exception ex)
+            TextureImporter importer = AssetImporter.GetAtPath(pngPath) as TextureImporter;
+            if (importer != null)
             {
-                Debug.LogWarning($"[ECHO] Failed to encode texture '{safeName}' to PNG: {ex.Message}");
-                return sourceTex;
+                importer.textureType = TextureImporterType.Default;
+                importer.wrapMode = TextureWrapMode.Repeat;
+                importer.SaveAndReimport();
             }
+
+            Texture2D loaded = AssetDatabase.LoadAssetAtPath<Texture2D>(pngPath);
+            if (loaded == null)
+                throw new InvalidOperationException("Unity failed to import generated texture asset " + pngPath + ".");
+
+            cache[sourceTex] = loaded;
+            return loaded;
         }
 
         private static Mesh PersistMesh(Mesh sourceMesh, string fallbackName, Dictionary<Mesh, Mesh> cache)
@@ -422,4 +558,3 @@ namespace Echo.Editor
         }
     }
 }
-
